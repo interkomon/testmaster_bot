@@ -1,0 +1,46 @@
+{
+  "tests" : {
+    "TSTEZ2SGTYR" : {
+      "testId" : "TSTEZ2SGTYR",
+      "accessCode" : "ACCPU6AUM3F9K",
+      "creatorId" : 0,
+      "creatorName" : "System",
+      "title" : "Демо-тест по Java",
+      "description" : "Демонстрационный тест с разными типами вопросов.",
+      "status" : "APPROVED",
+      "showCorrectAnswerImmediately" : true,
+      "questions" : [ {
+        "text" : "Какой тип данных используется для целых чисел в Java?",
+        "type" : "SINGLE_CHOICE",
+        "options" : [ "String", "int", "boolean", "double" ],
+        "correctOptionIndex" : 1,
+        "correctTextAnswer" : null,
+        "correctNumberAnswer" : null,
+        "photoFileId" : null
+      }, {
+        "text" : "Как называется точка входа в Java-программу?",
+        "type" : "TEXT_INPUT",
+        "options" : [ ],
+        "correctOptionIndex" : null,
+        "correctTextAnswer" : "main",
+        "correctNumberAnswer" : null,
+        "photoFileId" : null
+      }, {
+        "text" : "Сколько будет 2 + 2?",
+        "type" : "NUMBER_INPUT",
+        "options" : [ ],
+        "correctOptionIndex" : null,
+        "correctTextAnswer" : null,
+        "correctNumberAnswer" : 4.0,
+        "photoFileId" : null
+      } ],
+      "results" : [ ],
+      "private" : false,
+      "publicVisible" : true
+    }
+  },
+  "roles" : {
+    "7812898558" : "ADMIN",
+    "7855024656" : "MODERATOR"
+  }
+}

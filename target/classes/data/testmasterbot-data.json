@@ -1,0 +1,85 @@
+{
+  "tests" : {
+    "TSTW5X6SEBZ" : {
+      "testId" : "TSTW5X6SEBZ",
+      "accessCode" : "ACCYMSPPCQ745",
+      "creatorId" : 912151804,
+      "creatorName" : "@mggsd",
+      "title" : "Как дела",
+      "description" : "У меня хорошо",
+      "status" : "PENDING_MODERATION",
+      "showCorrectAnswerImmediately" : false,
+      "questions" : [ {
+        "text" : "Сколько тебе лет",
+        "type" : "SINGLE_CHOICE",
+        "options" : [ "1", "2", "3" ],
+        "correctOptionIndex" : 0,
+        "correctTextAnswer" : null,
+        "correctNumberAnswer" : null,
+        "photoFileId" : null
+      } ],
+      "results" : [ {
+        "resultId" : "RES4TJ3H95F",
+        "userId" : 6673046265,
+        "userName" : "Andrey",
+        "score" : 1,
+        "total" : 1,
+        "completedAt" : [ 2026, 4, 15, 23, 19, 59, 503833800 ],
+        "details" : [ {
+          "questionText" : "Сколько тебе лет",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        } ],
+        "percentText" : "100.0%",
+        "percent" : 100.0,
+        "completedAtText" : "15.04.2026 23:19"
+      } ],
+      "private" : false,
+      "publicVisible" : false
+    },
+    "TSTLPHAN4XJ" : {
+      "testId" : "TSTLPHAN4XJ",
+      "accessCode" : "ACCNMQBGVFERJ",
+      "creatorId" : 0,
+      "creatorName" : "System",
+      "title" : "Демо-тест по Java",
+      "description" : "Демонстрационный тест с разными типами вопросов.",
+      "status" : "APPROVED",
+      "showCorrectAnswerImmediately" : true,
+      "questions" : [ {
+        "text" : "Какой тип данных используется для целых чисел в Java?",
+        "type" : "SINGLE_CHOICE",
+        "options" : [ "String", "int", "boolean", "double" ],
+        "correctOptionIndex" : 1,
+        "correctTextAnswer" : null,
+        "correctNumberAnswer" : null,
+        "photoFileId" : null
+      }, {
+        "text" : "Как называется точка входа в Java-программу?",
+        "type" : "TEXT_INPUT",
+        "options" : [ ],
+        "correctOptionIndex" : null,
+        "correctTextAnswer" : "main",
+        "correctNumberAnswer" : null,
+        "photoFileId" : null
+      }, {
+        "text" : "Сколько будет 2 + 2?",
+        "type" : "NUMBER_INPUT",
+        "options" : [ ],
+        "correctOptionIndex" : null,
+        "correctTextAnswer" : null,
+        "correctNumberAnswer" : 4.0,
+        "photoFileId" : null
+      } ],
+      "results" : [ ],
+      "private" : false,
+      "publicVisible" : true
+    }
+  },
+  "roles" : {
+    "7812898558" : "ADMIN",
+    "7855024656" : "MODERATOR"
+  }
+}
