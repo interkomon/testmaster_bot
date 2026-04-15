@@ -1,5 +1,6 @@
 package main.testmasterbot.repository;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import main.testmasterbot.model.BotData;
@@ -16,8 +17,12 @@ public class JsonDataStore {
         this.file = new File(filePath);
         this.mapper = new ObjectMapper().findAndRegisterModules();
         this.mapper.enable(SerializationFeature.INDENT_OUTPUT);
+        this.mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
         ensureParentDir();
         this.cachedData = readFromFile();
+
+        System.out.println("JSON file path = " + file.getAbsolutePath());
     }
 
     public synchronized BotData load() {
@@ -36,9 +41,12 @@ public class JsonDataStore {
         if (!file.exists()) {
             return new BotData();
         }
+
         try {
             return mapper.readValue(file, BotData.class);
         } catch (IOException e) {
+            System.out.println("Ошибка чтения JSON: " + e.getMessage());
+            e.printStackTrace();
             return new BotData();
         }
     }
