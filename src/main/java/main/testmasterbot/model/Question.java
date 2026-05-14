@@ -11,4 +11,5 @@ public class Question {
     public String correctTextAnswer;
     public Double correctNumberAnswer;
     public String photoFileId;
+    public Integer timeLimitSeconds;
 }

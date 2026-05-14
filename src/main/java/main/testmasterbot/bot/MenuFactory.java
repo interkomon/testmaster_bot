@@ -1,5 +1,6 @@
 package main.testmasterbot.bot;
 
+import main.testmasterbot.model.AnswerRevealMode;
 import main.testmasterbot.model.PublicationStatus;
 import main.testmasterbot.model.Role;
 import main.testmasterbot.model.TestData;
@@ -31,17 +32,18 @@ public final class MenuFactory {
         row2.add("❓ Помощь");
         rows.add(row2);
 
-        if (role == Role.MODERATOR) {
+        if (role == Role.MODERATOR || role == Role.ADMIN) {
             KeyboardRow row3 = new KeyboardRow();
             row3.add("🛡 Очередь модерации");
+            row3.add("🚫 Блокировки");
             rows.add(row3);
         }
 
         if (role == Role.ADMIN) {
-            KeyboardRow row3 = new KeyboardRow();
-            row3.add("🛡 Очередь модерации");
-            row3.add("⚙️ Админ-панель");
-            rows.add(row3);
+            KeyboardRow row4 = new KeyboardRow();
+            row4.add("⚙️ Админ-панель");
+            row4.add("📈 Статистика");
+            rows.add(row4);
         }
 
         KeyboardRow last = new KeyboardRow();
@@ -55,10 +57,32 @@ public final class MenuFactory {
                 .build();
     }
 
+    public static ReplyKeyboardMarkup compactReplyMenu() {
+        List<KeyboardRow> rows = new ArrayList<>();
+        KeyboardRow row = new KeyboardRow();
+        row.add("🏠 Меню");
+        rows.add(row);
+        return ReplyKeyboardMarkup.builder().keyboard(rows).resizeKeyboard(true).build();
+    }
+
+    public static ReplyKeyboardMarkup quizLockedMenu() {
+        List<KeyboardRow> rows = new ArrayList<>();
+        KeyboardRow row = new KeyboardRow();
+        row.add("⛔ Прервать тест");
+        rows.add(row);
+        return ReplyKeyboardMarkup.builder().keyboard(rows).resizeKeyboard(true).build();
+    }
+
     public static InlineKeyboardMarkup compactMenuButton() {
         List<InlineKeyboardRow> rows = new ArrayList<>();
+        rows.add(menuRow());
+        return InlineKeyboardMarkup.builder().keyboard(rows).build();
+    }
+
+    public static InlineKeyboardMarkup quizActionMenu() {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
         rows.add(new InlineKeyboardRow(
-                InlineKeyboardButton.builder().text("🏠 Открыть меню").callbackData("menu:open").build()
+                InlineKeyboardButton.builder().text("⛔ Прервать тест").callbackData("quiz:abort").build()
         ));
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
     }
@@ -82,31 +106,81 @@ public final class MenuFactory {
         rows.add(menuRow());
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
     }
-    public static ReplyKeyboardMarkup compactReplyMenu() {
-        List<KeyboardRow> rows = new ArrayList<>();
 
-        KeyboardRow row = new KeyboardRow();
-        row.add("🏠 Меню");
-        rows.add(row);
-
-        return ReplyKeyboardMarkup.builder()
-                .keyboard(rows)
-                .resizeKeyboard(true)
-                .build();
-    }
-    public static InlineKeyboardMarkup answerPolicyMenu(boolean selectedShow) {
+    public static InlineKeyboardMarkup answerPolicyMenu(AnswerRevealMode selected) {
         List<InlineKeyboardRow> rows = new ArrayList<>();
         rows.add(new InlineKeyboardRow(
                 InlineKeyboardButton.builder()
-                        .text((selectedShow ? "✅ " : "") + "Показывать правильный ответ сразу")
-                        .callbackData("policy:show")
+                        .text((selected == AnswerRevealMode.IMMEDIATE ? "✅ " : "") + "Показывать сразу")
+                        .callbackData("policy:immediate")
                         .build()
         ));
         rows.add(new InlineKeyboardRow(
                 InlineKeyboardButton.builder()
-                        .text((!selectedShow ? "✅ " : "") + "Не показывать правильный ответ сразу")
-                        .callbackData("policy:hide")
+                        .text((selected == AnswerRevealMode.END_ONLY ? "✅ " : "") + "Только в конце")
+                        .callbackData("policy:end")
                         .build()
+        ));
+        rows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder()
+                        .text((selected == AnswerRevealMode.NEVER ? "✅ " : "") + "Не показывать ответы")
+                        .callbackData("policy:never")
+                        .build()
+        ));
+        rows.add(menuRow());
+        return InlineKeyboardMarkup.builder().keyboard(rows).build();
+    }
+
+    public static InlineKeyboardMarkup answerRevealEditMenu(String testId, AnswerRevealMode selected) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        rows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder()
+                        .text((selected == AnswerRevealMode.IMMEDIATE ? "✅ " : "") + "Показывать сразу")
+                        .callbackData("set_reveal:" + testId + ":IMMEDIATE")
+                        .build()
+        ));
+        rows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder()
+                        .text((selected == AnswerRevealMode.END_ONLY ? "✅ " : "") + "Только в конце")
+                        .callbackData("set_reveal:" + testId + ":END_ONLY")
+                        .build()
+        ));
+        rows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder()
+                        .text((selected == AnswerRevealMode.NEVER ? "✅ " : "") + "Не показывать")
+                        .callbackData("set_reveal:" + testId + ":NEVER")
+                        .build()
+        ));
+        rows.add(menuRow());
+        return InlineKeyboardMarkup.builder().keyboard(rows).build();
+    }
+
+    public static InlineKeyboardMarkup testTimeMenu() {
+        return timeMenu("testtime:", true);
+    }
+
+    public static InlineKeyboardMarkup testTimeEditMenu(String testId) {
+        return timeMenu("set_time:" + testId + ":", true);
+    }
+
+    public static InlineKeyboardMarkup questionTimeMenu() {
+        return timeMenu("qtime:", false);
+    }
+
+    private static InlineKeyboardMarkup timeMenu(String prefix, boolean allowLong) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        rows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder().text("Без ограничения").callbackData(prefix + "0").build()
+        ));
+        rows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder().text("30 сек").callbackData(prefix + "30").build(),
+                InlineKeyboardButton.builder().text("1 мин").callbackData(prefix + "60").build(),
+                InlineKeyboardButton.builder().text("2 мин").callbackData(prefix + "120").build()
+        ));
+        rows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder().text("5 мин").callbackData(prefix + "300").build(),
+                InlineKeyboardButton.builder().text(allowLong ? "10 мин" : "3 мин").callbackData(prefix + (allowLong ? "600" : "180")).build(),
+                InlineKeyboardButton.builder().text(allowLong ? "20 мин" : "10 мин").callbackData(prefix + (allowLong ? "1200" : "600")).build()
         ));
         rows.add(menuRow());
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
@@ -149,8 +223,14 @@ public final class MenuFactory {
         InlineKeyboardRow row = new InlineKeyboardRow();
         for (int i = 1; i <= count; i++) {
             row.add(InlineKeyboardButton.builder().text(String.valueOf(i)).callbackData("correctopt:" + i).build());
+            if (row.size() == 4) {
+                rows.add(row);
+                row = new InlineKeyboardRow();
+            }
         }
-        rows.add(row);
+        if (!row.isEmpty()) {
+            rows.add(row);
+        }
         rows.add(menuRow());
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
     }
@@ -204,7 +284,9 @@ public final class MenuFactory {
         if (!row.isEmpty()) {
             rows.add(row);
         }
-        rows.add(menuRow());
+        rows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder().text("⛔ Прервать тест").callbackData("quiz:abort").build()
+        ));
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
     }
 
@@ -233,11 +315,14 @@ public final class MenuFactory {
                 InlineKeyboardButton.builder().text("📝 Описание").callbackData("edit_desc:" + test.testId).build()
         ));
         rows.add(new InlineKeyboardRow(
-                InlineKeyboardButton.builder().text("⚙️ Показ ответа").callbackData("toggle_policy:" + test.testId).build(),
-                InlineKeyboardButton.builder().text("🔁 Доступ").callbackData("toggle_access:" + test.testId).build()
+                InlineKeyboardButton.builder().text("🙈 Показ ответов").callbackData("reveal_menu:" + test.testId).build(),
+                InlineKeyboardButton.builder().text("⏱ Время").callbackData("time_menu:" + test.testId).build()
         ));
         rows.add(new InlineKeyboardRow(
-                InlineKeyboardButton.builder().text("▶ Запустить").callbackData("play:" + test.testId).build(),
+                InlineKeyboardButton.builder().text("🔁 Доступ").callbackData("toggle_access:" + test.testId).build(),
+                InlineKeyboardButton.builder().text("▶ Запустить").callbackData("play:" + test.testId).build()
+        ));
+        rows.add(new InlineKeyboardRow(
                 InlineKeyboardButton.builder().text("🗑 Удалить").callbackData("delete:" + test.testId).build()
         ));
         if (test.status == PublicationStatus.REJECTED || test.status == PublicationStatus.PRIVATE) {
@@ -292,16 +377,34 @@ public final class MenuFactory {
         return InlineKeyboardMarkup.builder().keyboard(rows).build();
     }
 
+    public static InlineKeyboardMarkup moderationTools() {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        rows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder().text("🚫 Запретить создание").callbackData("mod:block_create").build()
+        ));
+        rows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder().text("✅ Снять запрет").callbackData("mod:unblock_create").build()
+        ));
+        rows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder().text("📋 Активные ограничения").callbackData("mod:list_blocks").build()
+        ));
+        rows.add(menuRow());
+        return InlineKeyboardMarkup.builder().keyboard(rows).build();
+    }
+
     public static InlineKeyboardMarkup adminMenu() {
         List<InlineKeyboardRow> rows = new ArrayList<>();
         rows.add(new InlineKeyboardRow(
-                InlineKeyboardButton.builder().text("👥 Показать роли").callbackData("admin:list_roles").build()
+                InlineKeyboardButton.builder().text("👥 Пользователи").callbackData("admin:list_users").build(),
+                InlineKeyboardButton.builder().text("👥 Роли").callbackData("admin:list_roles").build()
         ));
         rows.add(new InlineKeyboardRow(
-                InlineKeyboardButton.builder().text("➕ Назначить модератора").callbackData("admin:add_mod").build()
+                InlineKeyboardButton.builder().text("📈 Статистика").callbackData("admin:stats").build(),
+                InlineKeyboardButton.builder().text("📤 CSV").callbackData("admin:export_stats").build()
         ));
         rows.add(new InlineKeyboardRow(
-                InlineKeyboardButton.builder().text("⭐ Назначить администратора").callbackData("admin:add_admin").build()
+                InlineKeyboardButton.builder().text("➕ Модератор").callbackData("admin:add_mod").build(),
+                InlineKeyboardButton.builder().text("⭐ Админ").callbackData("admin:add_admin").build()
         ));
         rows.add(new InlineKeyboardRow(
                 InlineKeyboardButton.builder().text("➖ Снять роль").callbackData("admin:remove_role").build()

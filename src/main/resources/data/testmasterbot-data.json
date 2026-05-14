@@ -9,6 +9,8 @@
       "description" : "Демонстрационный тест с разными типами вопросов.",
       "status" : "APPROVED",
       "showCorrectAnswerImmediately" : true,
+      "answerRevealMode" : "IMMEDIATE",
+      "totalTimeLimitSeconds" : null,
       "questions" : [ {
         "text" : "Какой тип данных используется для целых чисел в Java?",
         "type" : "SINGLE_CHOICE",
@@ -16,7 +18,8 @@
         "correctOptionIndex" : 1,
         "correctTextAnswer" : null,
         "correctNumberAnswer" : null,
-        "photoFileId" : null
+        "photoFileId" : null,
+        "timeLimitSeconds" : null
       }, {
         "text" : "Как называется точка входа в Java-программу?",
         "type" : "TEXT_INPUT",
@@ -24,7 +27,8 @@
         "correctOptionIndex" : null,
         "correctTextAnswer" : "main",
         "correctNumberAnswer" : null,
-        "photoFileId" : null
+        "photoFileId" : null,
+        "timeLimitSeconds" : null
       }, {
         "text" : "Сколько будет 2 + 2?",
         "type" : "NUMBER_INPUT",
@@ -32,19 +36,212 @@
         "correctOptionIndex" : null,
         "correctTextAnswer" : null,
         "correctNumberAnswer" : 4.0,
-        "photoFileId" : null
+        "photoFileId" : null,
+        "timeLimitSeconds" : null
+      } ],
+      "results" : [ {
+        "resultId" : "RESLJMPAZ4K",
+        "userId" : 1379258122,
+        "userName" : "@vernxxo",
+        "score" : 0,
+        "total" : 3,
+        "completedAt" : [ 2026, 4, 16, 15, 40, 5, 365216700 ],
+        "details" : [ {
+          "questionText" : "Какой тип данных используется для целых чисел в Java?",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "String",
+          "correctAnswer" : "int",
+          "correct" : false
+        }, {
+          "questionText" : "Как называется точка входа в Java-программу?",
+          "questionType" : "TEXT_INPUT",
+          "userAnswer" : "➕ Создать тест",
+          "correctAnswer" : "main",
+          "correct" : false
+        }, {
+          "questionText" : "Сколько будет 2 + 2?",
+          "questionType" : "NUMBER_INPUT",
+          "userAnswer" : "1",
+          "correctAnswer" : "4",
+          "correct" : false
+        } ]
+      }, {
+        "resultId" : "RES3U9FWC2U",
+        "userId" : 912151804,
+        "userName" : "@mggsd",
+        "score" : 1,
+        "total" : 3,
+        "completedAt" : [ 2026, 4, 16, 18, 48, 38, 229353800 ],
+        "details" : [ {
+          "questionText" : "Какой тип данных используется для целых чисел в Java?",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "String",
+          "correctAnswer" : "int",
+          "correct" : false
+        }, {
+          "questionText" : "Как называется точка входа в Java-программу?",
+          "questionType" : "TEXT_INPUT",
+          "userAnswer" : "➕ Создать тест",
+          "correctAnswer" : "main",
+          "correct" : false
+        }, {
+          "questionText" : "Сколько будет 2 + 2?",
+          "questionType" : "NUMBER_INPUT",
+          "userAnswer" : "4",
+          "correctAnswer" : "4",
+          "correct" : true
+        } ]
+      }, {
+        "resultId" : "RESHY4LWX7F",
+        "userId" : 912151804,
+        "userName" : "@mggsd",
+        "score" : 0,
+        "total" : 3,
+        "completedAt" : [ 2026, 4, 17, 21, 10, 52, 132230100 ],
+        "details" : [ {
+          "questionText" : "Какой тип данных используется для целых чисел в Java?",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "String",
+          "correctAnswer" : "int",
+          "correct" : false
+        }, {
+          "questionText" : "Как называется точка входа в Java-программу?",
+          "questionType" : "TEXT_INPUT",
+          "userAnswer" : "➕ Создать тест",
+          "correctAnswer" : "main",
+          "correct" : false
+        }, {
+          "questionText" : "Сколько будет 2 + 2?",
+          "questionType" : "NUMBER_INPUT",
+          "userAnswer" : "1",
+          "correctAnswer" : "4",
+          "correct" : false
+        } ]
+      }, {
+        "resultId" : "RESNRGF37YV",
+        "userId" : 1032092163,
+        "userName" : "Mikhail",
+        "score" : 1,
+        "total" : 3,
+        "completedAt" : [ 2026, 4, 19, 15, 41, 19, 799440600 ],
+        "details" : [ {
+          "questionText" : "Какой тип данных используется для целых чисел в Java?",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "boolean",
+          "correctAnswer" : "int",
+          "correct" : false
+        }, {
+          "questionText" : "Как называется точка входа в Java-программу?",
+          "questionType" : "TEXT_INPUT",
+          "userAnswer" : "void",
+          "correctAnswer" : "main",
+          "correct" : false
+        }, {
+          "questionText" : "Сколько будет 2 + 2?",
+          "questionType" : "NUMBER_INPUT",
+          "userAnswer" : "4",
+          "correctAnswer" : "4",
+          "correct" : true
+        } ]
+      }, {
+        "resultId" : "RESTZZXW36V",
+        "userId" : 2037134532,
+        "userName" : "@deimoson",
+        "score" : 1,
+        "total" : 3,
+        "completedAt" : [ 2026, 5, 12, 23, 48, 26, 320576000 ],
+        "details" : [ {
+          "questionText" : "Какой тип данных используется для целых чисел в Java?",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "int",
+          "correctAnswer" : "int",
+          "correct" : true
+        }, {
+          "questionText" : "Как называется точка входа в Java-программу?",
+          "questionType" : "TEXT_INPUT",
+          "userAnswer" : "Хз",
+          "correctAnswer" : "main",
+          "correct" : false
+        }, {
+          "questionText" : "Сколько будет 2 + 2?",
+          "questionType" : "NUMBER_INPUT",
+          "userAnswer" : "5",
+          "correctAnswer" : "4",
+          "correct" : false
+        } ]
+      } ]
+    },
+    "TSTBFMEE8JQ" : {
+      "testId" : "TSTBFMEE8JQ",
+      "accessCode" : "ACCEXB4T8DKVF",
+      "creatorId" : 1379258122,
+      "creatorName" : "@vernxxo",
+      "title" : "Гогонрорпр",
+      "description" : "Лоппооп",
+      "status" : "PRIVATE",
+      "showCorrectAnswerImmediately" : true,
+      "answerRevealMode" : "IMMEDIATE",
+      "totalTimeLimitSeconds" : null,
+      "questions" : [ {
+        "text" : "1. ❤️",
+        "type" : "NUMBER_INPUT",
+        "options" : [ ],
+        "correctOptionIndex" : null,
+        "correctTextAnswer" : null,
+        "correctNumberAnswer" : 5.555555555E9,
+        "photoFileId" : null,
+        "timeLimitSeconds" : null
       } ],
       "results" : [ ]
     },
-    "TSTSWL5X7K6" : {
-      "testId" : "TSTSWL5X7K6",
-      "accessCode" : "ACCUCP6ZG58FC",
+    "TST37RB2MFW" : {
+      "testId" : "TST37RB2MFW",
+      "accessCode" : "ACCDLD9WV8J66",
+      "creatorId" : 1032092163,
+      "creatorName" : "Mikhail",
+      "title" : "К",
+      "description" : "Пол",
+      "status" : "PRIVATE",
+      "showCorrectAnswerImmediately" : true,
+      "answerRevealMode" : "IMMEDIATE",
+      "totalTimeLimitSeconds" : null,
+      "questions" : [ {
+        "text" : "Пол",
+        "type" : "SINGLE_CHOICE",
+        "options" : [ "Й", "У", "Р", "И" ],
+        "correctOptionIndex" : 1,
+        "correctTextAnswer" : null,
+        "correctNumberAnswer" : null,
+        "photoFileId" : null,
+        "timeLimitSeconds" : null
+      } ],
+      "results" : [ {
+        "resultId" : "RES6Z7QZ3V7",
+        "userId" : 1032092163,
+        "userName" : "Mikhail",
+        "score" : 0,
+        "total" : 1,
+        "completedAt" : [ 2026, 4, 19, 15, 42, 34, 921945300 ],
+        "details" : [ {
+          "questionText" : "Пол",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "Р",
+          "correctAnswer" : "У",
+          "correct" : false
+        } ]
+      } ]
+    },
+    "TST4QXYKHQW" : {
+      "testId" : "TST4QXYKHQW",
+      "accessCode" : "ACCAX57S4GWZU",
       "creatorId" : 912151804,
       "creatorName" : "@mggsd",
       "title" : "1",
       "description" : "1",
-      "status" : "PRIVATE",
+      "status" : "APPROVED",
       "showCorrectAnswerImmediately" : false,
+      "answerRevealMode" : "END_ONLY",
+      "totalTimeLimitSeconds" : 300,
       "questions" : [ {
         "text" : "1",
         "type" : "SINGLE_CHOICE",
@@ -52,13 +249,252 @@
         "correctOptionIndex" : 0,
         "correctTextAnswer" : null,
         "correctNumberAnswer" : null,
-        "photoFileId" : null
+        "photoFileId" : null,
+        "timeLimitSeconds" : null
+      }, {
+        "text" : "1",
+        "type" : "SINGLE_CHOICE",
+        "options" : [ "1", "1" ],
+        "correctOptionIndex" : 0,
+        "correctTextAnswer" : null,
+        "correctNumberAnswer" : null,
+        "photoFileId" : null,
+        "timeLimitSeconds" : null
+      } ],
+      "results" : [ {
+        "resultId" : "RESMVNP6EGH",
+        "userId" : 912151804,
+        "userName" : "@mggsd",
+        "score" : 2,
+        "total" : 2,
+        "completedAt" : [ 2026, 5, 12, 23, 41, 3, 658337100 ],
+        "details" : [ {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        }, {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        } ]
+      }, {
+        "resultId" : "RESLR7NX97E",
+        "userId" : 2037134532,
+        "userName" : "@deimoson",
+        "score" : 1,
+        "total" : 2,
+        "completedAt" : [ 2026, 5, 12, 23, 41, 22, 186042300 ],
+        "details" : [ {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        }, {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : false
+        } ]
+      }, {
+        "resultId" : "RESCTXC87LU",
+        "userId" : 2037134532,
+        "userName" : "@deimoson",
+        "score" : 1,
+        "total" : 2,
+        "completedAt" : [ 2026, 5, 12, 23, 41, 34, 284253500 ],
+        "details" : [ {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : false
+        }, {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        } ]
+      }, {
+        "resultId" : "RESHTNSNBFL",
+        "userId" : 2037134532,
+        "userName" : "@deimoson",
+        "score" : 2,
+        "total" : 2,
+        "completedAt" : [ 2026, 5, 12, 23, 48, 37, 757979900 ],
+        "details" : [ {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        }, {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        } ]
+      }, {
+        "resultId" : "RESLRXB9FQJ",
+        "userId" : 912151804,
+        "userName" : "@mggsd",
+        "score" : 2,
+        "total" : 2,
+        "completedAt" : [ 2026, 5, 12, 23, 49, 0, 618304500 ],
+        "details" : [ {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        }, {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        } ]
+      }, {
+        "resultId" : "RESQY75WC5Y",
+        "userId" : 912151804,
+        "userName" : "@mggsd",
+        "score" : 2,
+        "total" : 2,
+        "completedAt" : [ 2026, 5, 13, 0, 4, 15, 113118900 ],
+        "details" : [ {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        }, {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        } ]
+      }, {
+        "resultId" : "RES5T7RZ3MR",
+        "userId" : 912151804,
+        "userName" : "@mggsd",
+        "score" : 2,
+        "total" : 2,
+        "completedAt" : [ 2026, 5, 13, 0, 28, 24, 647468100 ],
+        "details" : [ {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        }, {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        } ]
+      }, {
+        "resultId" : "RESAQAFYNUN",
+        "userId" : 912151804,
+        "userName" : "@mggsd",
+        "score" : 2,
+        "total" : 2,
+        "completedAt" : [ 2026, 5, 13, 0, 32, 15, 144925300 ],
+        "details" : [ {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        }, {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        } ]
+      }, {
+        "resultId" : "RESQTHVZVT9",
+        "userId" : 912151804,
+        "userName" : "@mggsd",
+        "score" : 2,
+        "total" : 2,
+        "completedAt" : [ 2026, 5, 13, 0, 33, 28, 284129900 ],
+        "details" : [ {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        }, {
+          "questionText" : "1",
+          "questionType" : "SINGLE_CHOICE",
+          "userAnswer" : "1",
+          "correctAnswer" : "1",
+          "correct" : true
+        } ]
+      } ]
+    },
+    "TSTJ93YVTCN" : {
+      "testId" : "TSTJ93YVTCN",
+      "accessCode" : "ACC36HH42MLH9",
+      "creatorId" : 2037134532,
+      "creatorName" : "@deimoson",
+      "title" : "Привет, @deimoson!\n\nТвоя роль: Пользователь\n\nВозможности:\n• Создание тестов\n• Описание теста\n• Вопросы с вариантами, текстом и числами\n• Фото к вопросам\n• Приватные коды и ссылки\n• Подробные результаты прохождения\n\nДля своего ID напиши /id.Привет, @deimoson!\n\nТвоя роль: Пользователь\n\nВозможности:\n• Создание тестов\n• Описание теста\n• Вопросы с вариантами, текстом и числами\n• Фото к вопросам\n• Приватные коды и ссылки\n• Подробные результаты прохождения\n\nДля своего ID напиши /id.",
+      "description" : "Привет, @deimoson!\n\nТвоя роль: Пользователь\n\nВозможности:\n• Создание тестов\n• Описание теста\n• Вопросы с вариантами, текстом и числами\n• Фото к вопросам\n• Приватные коды и ссылки\n• Подробные результаты прохождения\n\nДля своего ID напиши /id.Привет, @deimoson!\n\nТвоя роль: Пользователь\n\nВозможности:\n• Создание тестов\n• Описание теста\n• Вопросы с вариантами, текстом и числами\n• Фото к вопросам\n• Приватные коды и ссылки\n• Подробные результаты прохождения\n\nДля своего ID напиши /id.Привет, @deimoson!\n\nТвоя роль: Пользователь\n\nВозможности:\n• Создание тестов\n• Описание теста\n• Вопросы с вариантами, текстом и числами\n• Фото к вопросам\n• Приватные коды и ссылки\n• Подробные результаты прохождения\n\nДля своего ID напиши /id.",
+      "status" : "PRIVATE",
+      "showCorrectAnswerImmediately" : false,
+      "answerRevealMode" : "IMMEDIATE",
+      "totalTimeLimitSeconds" : null,
+      "questions" : [ {
+        "text" : "1.",
+        "type" : "SINGLE_CHOICE",
+        "options" : [ "Оаоаоа", "Опоп" ],
+        "correctOptionIndex" : 0,
+        "correctTextAnswer" : null,
+        "correctNumberAnswer" : null,
+        "photoFileId" : null,
+        "timeLimitSeconds" : null
+      }, {
+        "text" : "Оаоаоа",
+        "type" : "NUMBER_INPUT",
+        "options" : [ ],
+        "correctOptionIndex" : null,
+        "correctTextAnswer" : null,
+        "correctNumberAnswer" : 67.0,
+        "photoFileId" : null,
+        "timeLimitSeconds" : null
       } ],
       "results" : [ ]
     }
   },
   "roles" : {
     "7812898558" : "ADMIN",
-    "7855024656" : "MODERATOR"
-  }
+    "7855024656" : "MODERATOR",
+    "912151804" : "ADMIN",
+    "2037134532" : "ADMIN"
+  },
+  "knownUsers" : {
+    "912151804" : {
+      "userId" : 912151804,
+      "username" : "mggsd",
+      "firstName" : "andrey",
+      "lastName" : null
+    },
+    "2037134532" : {
+      "userId" : 2037134532,
+      "username" : "deimoson",
+      "firstName" : "Дима",
+      "lastName" : null
+    }
+  },
+  "restrictions" : { }
 }

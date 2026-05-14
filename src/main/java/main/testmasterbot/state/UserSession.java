@@ -1,5 +1,6 @@
 package main.testmasterbot.state;
 
+import main.testmasterbot.model.AnswerRevealMode;
 import main.testmasterbot.model.Question;
 import main.testmasterbot.model.TestData;
 
@@ -13,6 +14,9 @@ public class UserSession {
     public int currentOptionIndex;
     public String selectedTestId;
 
+    public Long restrictionTargetUserId;
+    public int restrictionDays;
+
     public void resetCurrentQuestion() {
         draftQuestion = new Question();
         draftQuestion.options = new ArrayList<>();
@@ -23,7 +27,9 @@ public class UserSession {
     public void prepareNewTest() {
         draftTest = new TestData();
         draftTest.questions = new ArrayList<>();
+        draftTest.answerRevealMode = AnswerRevealMode.IMMEDIATE;
         draftTest.showCorrectAnswerImmediately = true;
+        draftTest.totalTimeLimitSeconds = null;
         resetCurrentQuestion();
     }
 }

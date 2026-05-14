@@ -13,7 +13,13 @@ public class TestData {
     public String title;
     public String description;
     public PublicationStatus status;
+
+    /** Старое поле оставлено для совместимости со старыми JSON-файлами. */
     public Boolean showCorrectAnswerImmediately = true;
+
+    public AnswerRevealMode answerRevealMode = AnswerRevealMode.IMMEDIATE;
+    public Integer totalTimeLimitSeconds;
+
     public List<Question> questions = new ArrayList<>();
     public List<TestResult> results = new ArrayList<>();
 
@@ -25,6 +31,14 @@ public class TestData {
     @JsonIgnore
     public boolean isPrivate() {
         return status == PublicationStatus.PRIVATE;
+    }
+
+    @JsonIgnore
+    public AnswerRevealMode getEffectiveAnswerRevealMode() {
+        if (answerRevealMode != null) {
+            return answerRevealMode;
+        }
+        return Boolean.TRUE.equals(showCorrectAnswerImmediately) ? AnswerRevealMode.IMMEDIATE : AnswerRevealMode.END_ONLY;
     }
 
     @JsonIgnore

@@ -10,6 +10,7 @@ import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateC
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
@@ -27,6 +28,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
@@ -79,8 +84,30 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         Role role = botService.getRole(chatId);
         UserSession session = sessions.computeIfAbsent(chatId, id -> new UserSession());
 
-        if (handleQuizTextIfNeeded(chatId, user, text)) {
-            return;
+        botService.rememberUser(user);
+
+        if (quizSessions.containsKey(chatId)) {
+            if (text.equals("⛔ Прервать тест")) {
+                quizSessions.remove(chatId);
+                sendText(chatId, "Прохождение теста прервано.", MenuFactory.mainMenu(role));
+                return;
+            }
+            if (text.equals("🏠 Меню") || text.equals("✋ Отмена") || text.equals("❓ Помощь") || text.equalsIgnoreCase("/help")) {
+                sendText(chatId,
+                        "Сейчас идёт прохождение теста. Меню скрыто до завершения.\n" +
+                                "Можно только ответить на вопрос или нажать «⛔ Прервать тест».",
+                        MenuFactory.quizLockedMenu());
+                return;
+            }
+            if (handleQuizTextIfNeeded(chatId, user, text)) {
+                return;
+            }
+            if (quizSessions.containsKey(chatId)) {
+                sendInline(chatId,
+                        "Сейчас идёт вопрос с вариантами. Выбери ответ кнопкой под карточкой вопроса.",
+                        MenuFactory.quizActionMenu());
+                return;
+            }
         }
 
         if (text.startsWith("/start")) {
@@ -102,6 +129,15 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             sendText(chatId, "Действие отменено.", MenuFactory.mainMenu(role));
             return;
         }
+
+        if (text.equals("⛔ Прервать тест")) {
+            if (quizSessions.containsKey(chatId)) {
+                quizSessions.remove(chatId);
+                sendText(chatId, "Прохождение теста прервано.", MenuFactory.mainMenu(role));
+                return;
+            }
+        }
+
         if (text.startsWith("/play ")) {
             startTestByCode(chatId, userName, text.substring(6).trim().toUpperCase(Locale.ROOT));
             return;
@@ -112,6 +148,18 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         }
 
         if (text.equals("➕ Создать тест")) {
+            if (botService.isCreationBlocked(chatId)) {
+                UserRestriction restriction = botService.getRestriction(chatId);
+                String until = restriction == null || restriction.blockedUntil == null
+                        ? "не указано"
+                        : restriction.blockedUntil.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                sendText(chatId,
+                        "Создание тестов временно запрещено.\n" +
+                                "До: " + until + "\n" +
+                                "Причина: " + (restriction == null || restriction.reason == null ? "-" : restriction.reason),
+                        MenuFactory.mainMenu(role));
+                return;
+            }
             session.prepareNewTest();
             session.state = SessionState.WAITING_TEST_TITLE;
             sendInputPrompt(chatId, "Введи название теста.");
@@ -143,6 +191,24 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             return;
         }
 
+        if (text.equals("📈 Статистика")) {
+            if (!botService.isAdmin(chatId)) {
+                sendText(chatId, "У тебя нет доступа к статистике.", MenuFactory.mainMenu(role));
+                return;
+            }
+            showAdminStats(chatId);
+            return;
+        }
+
+        if (text.equals("🚫 Блокировки")) {
+            if (!botService.isModeratorOrAdmin(chatId)) {
+                sendText(chatId, "У тебя нет доступа к блокировкам.", MenuFactory.mainMenu(role));
+                return;
+            }
+            showRestrictionPanel(chatId);
+            return;
+        }
+
         switch (session.state) {
             case WAITING_TEST_TITLE -> handleTestTitle(chatId, text);
             case WAITING_TEST_DESCRIPTION -> handleTestDescription(chatId, text);
@@ -156,6 +222,10 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             case WAITING_ADMIN_ADD_MODERATOR -> finishSetRole(chatId, text, Role.MODERATOR);
             case WAITING_ADMIN_ADD_ADMIN -> finishSetRole(chatId, text, Role.ADMIN);
             case WAITING_ADMIN_REMOVE_ROLE -> finishRemoveRole(chatId, text);
+            case WAITING_MOD_BLOCK_USER -> finishBlockUserStep(chatId, text);
+            case WAITING_MOD_BLOCK_DAYS -> finishBlockDaysStep(chatId, text);
+            case WAITING_MOD_BLOCK_REASON -> finishBlockReasonStep(chatId, text);
+            case WAITING_MOD_UNBLOCK_USER -> finishUnblockUser(chatId, text);
             default -> sendText(chatId, "Выбери действие через меню.", MenuFactory.mainMenu(role));
         }
     }
@@ -246,8 +316,8 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         session.draftTest.description = text.trim();
         session.state = SessionState.IDLE;
         sendInline(chatId,
-                "Показывать правильный ответ сразу, если пользователь ошибся?",
-                MenuFactory.answerPolicyMenu(Boolean.TRUE.equals(session.draftTest.showCorrectAnswerImmediately)));
+                "Выбери режим показа ответов для проходящего пользователя:",
+                MenuFactory.answerPolicyMenu(session.draftTest.getEffectiveAnswerRevealMode()));
     }
 
     private void startFirstQuestion(long chatId) {
@@ -299,7 +369,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         }
         UserSession session = sessions.get(chatId);
         session.draftQuestion.correctTextAnswer = text.trim();
-        askAddPhoto(chatId);
+        askQuestionTime(chatId);
     }
 
     private void handleCorrectNumber(long chatId, String text) {
@@ -310,7 +380,15 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         }
         UserSession session = sessions.get(chatId);
         session.draftQuestion.correctNumberAnswer = value;
-        askAddPhoto(chatId);
+        askQuestionTime(chatId);
+    }
+
+    private void askQuestionTime(long chatId) {
+        UserSession session = sessions.get(chatId);
+        if (session != null) {
+            session.state = SessionState.IDLE;
+        }
+        sendInline(chatId, "Выбери ограничение времени на этот вопрос:", MenuFactory.questionTimeMenu());
     }
 
     private void askAddPhoto(long chatId) {
@@ -356,29 +434,36 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
     }
 
     private void finishSetRole(long chatId, String text, Role roleToSet) {
-        try {
-            long userId = Long.parseLong(text.trim());
-            botService.setRole(userId, roleToSet);
-            sessions.get(chatId).state = SessionState.IDLE;
-            sendText(chatId,
-                    "Роль обновлена.\nПользователь " + userId + " теперь " + roleToSet + ".",
-                    MenuFactory.mainMenu(botService.getRole(chatId)));
-        } catch (NumberFormatException e) {
-            sendInputPrompt(chatId, "Нужно ввести числовой Telegram ID.");
+        Long userId = botService.resolveKnownUserId(text);
+        if (userId == null) {
+            sendInputPrompt(chatId, "Пользователь не найден. Введи @username известного пользователя или числовой Telegram ID.");
+            return;
         }
+        botService.setRole(userId, roleToSet);
+        sessions.get(chatId).state = SessionState.IDLE;
+        String label = botService.displayUser(userId);
+        sendText(chatId,
+                "Роль обновлена.\nПользователь " + label + " теперь " + roleToSet + ".",
+                MenuFactory.mainMenu(botService.getRole(chatId)));
+        sendText(userId,
+                "Тебе назначена роль: " + roleToSet + ".\nОткрой меню, чтобы увидеть новые возможности.",
+                MenuFactory.mainMenu(botService.getRole(userId)));
     }
 
     private void finishRemoveRole(long chatId, String text) {
-        try {
-            long userId = Long.parseLong(text.trim());
-            botService.removeRole(userId);
-            sessions.get(chatId).state = SessionState.IDLE;
-            sendText(chatId,
-                    "Специальная роль снята с пользователя " + userId + ".",
-                    MenuFactory.mainMenu(botService.getRole(chatId)));
-        } catch (NumberFormatException e) {
-            sendInputPrompt(chatId, "Нужно ввести числовой Telegram ID.");
+        Long userId = botService.resolveKnownUserId(text);
+        if (userId == null) {
+            sendInputPrompt(chatId, "Пользователь не найден. Введи @username известного пользователя или числовой Telegram ID.");
+            return;
         }
+        botService.removeRole(userId);
+        sessions.get(chatId).state = SessionState.IDLE;
+        sendText(chatId,
+                "Специальная роль снята с пользователя " + botService.displayUser(userId) + ".",
+                MenuFactory.mainMenu(botService.getRole(chatId)));
+        sendText(userId,
+                "С тебя снята специальная роль.",
+                MenuFactory.mainMenu(botService.getRole(userId)));
     }
 
     private void showMyTests(long chatId) {
@@ -393,7 +478,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             sb.append(test.title)
                     .append("\nID: ").append(test.testId)
                     .append("\nСтатус: ").append(statusText(test.status))
-                    .append("\nПоказ ответа сразу: ").append(Boolean.TRUE.equals(test.showCorrectAnswerImmediately) ? "Да" : "Нет")
+                    .append("\nПоказ ответов: ").append(revealModeText(test.getEffectiveAnswerRevealMode()))
                     .append("\nВопросов: ").append(test.questions.size())
                     .append("\nПрохождений: ").append(test.results.size())
                     .append("\nСредний результат: ").append(TextUtils.formatPercent(test.averagePercent())).append("%\n\n");
@@ -416,8 +501,10 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 .append("Описание: ").append(test.description == null || test.description.isBlank() ? "-" : test.description).append("\n")
                 .append("ID: ").append(test.testId).append("\n")
                 .append("Статус: ").append(statusText(test.status)).append("\n")
-                .append("Показывать правильный ответ сразу: ").append(Boolean.TRUE.equals(test.showCorrectAnswerImmediately) ? "Да" : "Нет").append("\n")
+                .append("Показ ответов: ").append(revealModeText(test.getEffectiveAnswerRevealMode())).append("\n")
+                .append("Время на тест: ").append(timeText(test.totalTimeLimitSeconds)).append("\n")
                 .append("Код запуска: ").append(playableCode).append("\n")
+                .append("ID теста нужен для хранения, код доступа — для приватного прохождения по ссылке.\n")
                 .append("Вопросов: ").append(test.questions.size()).append("\n")
                 .append("Прохождений: ").append(test.results.size()).append("\n")
                 .append("Средний результат: ").append(TextUtils.formatPercent(test.averagePercent())).append("%\n");
@@ -474,7 +561,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             sb.append("Специальных ролей пока нет.");
         } else {
             for (Map.Entry<Long, Role> entry : roles) {
-                sb.append(entry.getKey()).append(" — ").append(entry.getValue()).append("\n");
+                sb.append(botService.displayUser(entry.getKey())).append(" — ").append(entry.getValue()).append("\n");
             }
         }
         sendInline(chatId, sb.toString(), MenuFactory.adminMenu());
@@ -493,22 +580,32 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         QuizRuntime runtime = new QuizRuntime();
         runtime.testId = test.testId;
         runtime.userName = userName;
+        runtime.startedAtMillis = System.currentTimeMillis();
+        runtime.questionStartedAtMillis = System.currentTimeMillis();
         quizSessions.put(chatId, runtime);
+        sendRemoveKeyboard(chatId, "▶ Тест начался. Меню скрыто до завершения теста.");
         sendQuestion(chatId, test, runtime);
     }
 
     private void sendQuestion(long chatId, TestData test, QuizRuntime runtime) {
+        runtime.questionStartedAtMillis = System.currentTimeMillis();
         Question question = test.questions.get(runtime.questionIndex);
         StringBuilder sb = new StringBuilder();
-        sb.append("Тест: ").append(test.title)
-                .append("\nВопрос ").append(runtime.questionIndex + 1).append("/").append(test.questions.size())
-                .append("\n\n")
-                .append(question.text)
-                .append("\n\n");
+        sb.append("📘 ").append(test.title).append("\n")
+                .append("━━━━━━━━━━━━━━\n")
+                .append("Вопрос ").append(runtime.questionIndex + 1).append(" из ").append(test.questions.size()).append("\n")
+                .append("Тип: ").append(questionTypeText(question.type)).append("\n");
+        if (test.totalTimeLimitSeconds != null && test.totalTimeLimitSeconds > 0) {
+            sb.append("⏳ Время на тест: ").append(timeText(test.totalTimeLimitSeconds)).append("\n");
+        }
+        if (question.timeLimitSeconds != null && question.timeLimitSeconds > 0) {
+            sb.append("⏱ Время на вопрос: ").append(timeText(question.timeLimitSeconds)).append("\n");
+        }
+        sb.append("\n❓ ").append(question.text).append("\n\n");
 
         if (question.type == QuestionType.SINGLE_CHOICE) {
             for (int i = 0; i < question.options.size(); i++) {
-                sb.append(i + 1).append(". ").append(question.options.get(i)).append("\n");
+                sb.append(i + 1).append(") ").append(question.options.get(i)).append("\n");
             }
             if (question.photoFileId != null && !question.photoFileId.isBlank()) {
                 sendPhoto(chatId, question.photoFileId, sb.toString(), MenuFactory.answerButtons(test.testId, runtime.questionIndex, question.options.size()));
@@ -519,15 +616,15 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         }
 
         if (question.type == QuestionType.TEXT_INPUT) {
-            sb.append("Ответь текстом одним сообщением.");
+            sb.append("✍️ Ответь текстом одним сообщением.");
         } else {
-            sb.append("Ответь числом одним сообщением.");
+            sb.append("🔢 Ответь числом одним сообщением.");
         }
 
         if (question.photoFileId != null && !question.photoFileId.isBlank()) {
-            sendPhoto(chatId, question.photoFileId, sb.toString(), MenuFactory.compactMenuButton());
+            sendPhoto(chatId, question.photoFileId, sb.toString(), MenuFactory.quizActionMenu());
         } else {
-            sendInputPromptWithMenu(chatId, sb.toString(), MenuFactory.compactMenuButton());
+            sendInputPromptWithMenu(chatId, sb.toString(), MenuFactory.quizActionMenu());
         }
     }
 
@@ -541,9 +638,18 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             quizSessions.remove(chatId);
             return false;
         }
+
+        if (checkTotalTimeout(chatId, user, test, runtime)) {
+            return true;
+        }
+
         Question question = test.questions.get(runtime.questionIndex);
         if (question.type == QuestionType.SINGLE_CHOICE) {
             return false;
+        }
+
+        if (checkQuestionTimeout(chatId, user, test, runtime, question)) {
+            return true;
         }
 
         QuestionAnswerDetail detail = new QuestionAnswerDetail();
@@ -558,7 +664,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         } else {
             Double value = TextUtils.parseDouble(text);
             if (value == null) {
-                sendInputPrompt(chatId, "Нужно ввести число.");
+                sendInputPromptWithMenu(chatId, "Нужно ввести число.", MenuFactory.quizActionMenu());
                 return true;
             }
             detail.userAnswer = TextUtils.formatNumber(value);
@@ -569,12 +675,17 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         runtime.details.add(detail);
         if (correct) {
             runtime.score++;
-            sendText(chatId, "✅ Верно!", MenuFactory.mainMenu(botService.getRole(chatId)));
-        } else if (Boolean.TRUE.equals(test.showCorrectAnswerImmediately)) {
-            sendText(chatId, "❌ Неверно.\nПравильный ответ: " + detail.correctAnswer, MenuFactory.mainMenu(botService.getRole(chatId)));
-        } else {
-            sendText(chatId, "❌ Неверно.", MenuFactory.mainMenu(botService.getRole(chatId)));
         }
+
+        AnswerRevealMode mode = test.getEffectiveAnswerRevealMode();
+        if (correct) {
+            sendInline(chatId, "✅ Ответ принят: верно.", MenuFactory.quizActionMenu());
+        } else if (mode == AnswerRevealMode.IMMEDIATE) {
+            sendInline(chatId, "❌ Неверно.\nПравильный ответ: " + detail.correctAnswer, MenuFactory.quizActionMenu());
+        } else {
+            sendInline(chatId, "☑️ Ответ принят.", MenuFactory.quizActionMenu());
+        }
+
         runtime.questionIndex++;
         if (runtime.questionIndex < test.questions.size()) {
             sendQuestion(chatId, test, runtime);
@@ -591,8 +702,23 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         Role role = botService.getRole(chatId);
         UserSession session = sessions.computeIfAbsent(chatId, id -> new UserSession());
 
+        botService.rememberUser(callback.getFrom());
+
         if (data == null || data.isBlank()) {
             answerCallback(callback.getId(), "Пустое действие.");
+            return;
+        }
+
+        if (data.equals("quiz:abort")) {
+            quizSessions.remove(chatId);
+            answerCallback(callback.getId(), "Тест прерван.");
+            sendText(chatId, "Прохождение теста прервано.", MenuFactory.mainMenu(role));
+            return;
+        }
+
+        if (quizSessions.containsKey(chatId) && !data.startsWith("answer:")) {
+            answerCallback(callback.getId(), "Во время теста доступен только ответ или прерывание.");
+            sendInline(chatId, "Сейчас идёт прохождение теста. Заверши его или нажми «Прервать тест».", MenuFactory.quizActionMenu());
             return;
         }
 
@@ -601,20 +727,28 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             answerCallback(callback.getId(), "Меню открыто.");
             return;
         }
-        if (data.equals("policy:show")) {
+        if (data.startsWith("policy:")) {
             if (session.draftTest != null) {
-                session.draftTest.showCorrectAnswerImmediately = true;
-                startFirstQuestion(chatId);
+                String modeValue = data.substring("policy:".length());
+                session.draftTest.answerRevealMode = switch (modeValue) {
+                    case "immediate" -> AnswerRevealMode.IMMEDIATE;
+                    case "end" -> AnswerRevealMode.END_ONLY;
+                    case "never" -> AnswerRevealMode.NEVER;
+                    default -> AnswerRevealMode.IMMEDIATE;
+                };
+                session.draftTest.showCorrectAnswerImmediately = session.draftTest.answerRevealMode == AnswerRevealMode.IMMEDIATE;
+                sendInline(chatId, "Выбери ограничение времени на весь тест:", MenuFactory.testTimeMenu());
             }
-            answerCallback(callback.getId(), "Показывать ответ сразу: Да");
+            answerCallback(callback.getId(), "Режим показа ответов выбран.");
             return;
         }
-        if (data.equals("policy:hide")) {
+        if (data.startsWith("testtime:")) {
             if (session.draftTest != null) {
-                session.draftTest.showCorrectAnswerImmediately = false;
+                int seconds = Integer.parseInt(data.substring("testtime:".length()));
+                session.draftTest.totalTimeLimitSeconds = seconds <= 0 ? null : seconds;
                 startFirstQuestion(chatId);
             }
-            answerCallback(callback.getId(), "Показывать ответ сразу: Нет");
+            answerCallback(callback.getId(), "Время теста выбрано.");
             return;
         }
         if (data.equals("draft:add_question")) {
@@ -649,7 +783,8 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                     .append("Описание: ").append(saved.description == null ? "-" : saved.description).append("\n")
                     .append("ID теста: ").append(saved.testId).append("\n")
                     .append("Статус: ").append(statusText(saved.status)).append("\n")
-                    .append("Показывать ответ сразу: ").append(Boolean.TRUE.equals(saved.showCorrectAnswerImmediately) ? "Да" : "Нет").append("\n")
+                    .append("Показ ответов: ").append(revealModeText(saved.getEffectiveAnswerRevealMode())).append("\n")
+                    .append("Время на тест: ").append(timeText(saved.totalTimeLimitSeconds)).append("\n")
                     .append("Код запуска: ").append(playableCode).append("\n");
             if (saved.isPrivate()) {
                 sb.append("Код доступа для других: ").append(saved.accessCode).append("\n");
@@ -705,11 +840,20 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             try {
                 int selected = Integer.parseInt(data.substring(11));
                 session.draftQuestion.correctOptionIndex = selected - 1;
-                askAddPhoto(chatId);
+                askQuestionTime(chatId);
                 answerCallback(callback.getId(), "Правильный вариант выбран.");
             } catch (NumberFormatException e) {
                 answerCallback(callback.getId(), "Некорректный номер варианта.");
             }
+            return;
+        }
+        if (data.startsWith("qtime:")) {
+            int seconds = Integer.parseInt(data.substring("qtime:".length()));
+            if (session.draftQuestion != null) {
+                session.draftQuestion.timeLimitSeconds = seconds <= 0 ? null : seconds;
+            }
+            askAddPhoto(chatId);
+            answerCallback(callback.getId(), "Время на вопрос выбрано.");
             return;
         }
         if (data.equals("photo:yes")) {
@@ -780,11 +924,52 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             answerCallback(callback.getId(), "Редактирование описания.");
             return;
         }
+        if (data.startsWith("reveal_menu:")) {
+            String testId = data.substring("reveal_menu:".length());
+            TestData test = botService.getTestById(testId);
+            if (test == null) {
+                answerCallback(callback.getId(), "Тест не найден.");
+                return;
+            }
+            sendInline(chatId, "Выбери режим показа ответов:", MenuFactory.answerRevealEditMenu(testId, test.getEffectiveAnswerRevealMode()));
+            answerCallback(callback.getId(), "Настройка показа.");
+            return;
+        }
+        if (data.startsWith("set_reveal:")) {
+            String[] parts = data.split(":");
+            if (parts.length == 3) {
+                String testId = parts[1];
+                AnswerRevealMode mode = AnswerRevealMode.valueOf(parts[2]);
+                botService.updateAnswerRevealMode(testId, mode);
+                openMyTest(chatId, testId);
+            }
+            answerCallback(callback.getId(), "Настройка обновлена.");
+            return;
+        }
+        if (data.startsWith("time_menu:")) {
+            String testId = data.substring("time_menu:".length());
+            sendInline(chatId, "Выбери время на весь тест:", MenuFactory.testTimeEditMenu(testId));
+            answerCallback(callback.getId(), "Настройка времени.");
+            return;
+        }
+        if (data.startsWith("set_time:")) {
+            String[] parts = data.split(":");
+            if (parts.length == 3) {
+                String testId = parts[1];
+                int seconds = Integer.parseInt(parts[2]);
+                botService.updateTotalTimeLimit(testId, seconds <= 0 ? null : seconds);
+                openMyTest(chatId, testId);
+            }
+            answerCallback(callback.getId(), "Время обновлено.");
+            return;
+        }
         if (data.startsWith("toggle_policy:")) {
             String testId = data.substring(14);
-            botService.toggleShowCorrectAnswerImmediately(testId);
-            openMyTest(chatId, testId);
-            answerCallback(callback.getId(), "Настройка обновлена.");
+            TestData test = botService.getTestById(testId);
+            if (test != null) {
+                sendInline(chatId, "Выбери режим показа ответов:", MenuFactory.answerRevealEditMenu(testId, test.getEffectiveAnswerRevealMode()));
+            }
+            answerCallback(callback.getId(), "Настройка показа.");
             return;
         }
         if (data.startsWith("toggle_access:")) {
@@ -824,7 +1009,12 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 return;
             }
             String testId = data.substring(12);
-            botService.approveTest(testId);
+            TestData approved = botService.approveTest(testId);
+            if (approved != null) {
+                sendText(approved.creatorId,
+                        "✅ Твой тест «" + approved.title + "» одобрен и опубликован.",
+                        MenuFactory.mainMenu(botService.getRole(approved.creatorId)));
+            }
             showModerationQueue(chatId);
             answerCallback(callback.getId(), "Тест одобрен.");
             return;
@@ -835,9 +1025,70 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 return;
             }
             String testId = data.substring(11);
-            botService.rejectTest(testId);
+            TestData rejected = botService.rejectTest(testId);
+            if (rejected != null) {
+                sendText(rejected.creatorId,
+                        "❌ Твой тест «" + rejected.title + "» отклонён модератором.",
+                        MenuFactory.mainMenu(botService.getRole(rejected.creatorId)));
+            }
             showModerationQueue(chatId);
             answerCallback(callback.getId(), "Тест отклонён.");
+            return;
+        }
+        if (data.equals("admin:list_users")) {
+            if (!botService.isAdmin(chatId)) {
+                answerCallback(callback.getId(), "Нет доступа.");
+                return;
+            }
+            showUsersList(chatId);
+            answerCallback(callback.getId(), "Пользователи.");
+            return;
+        }
+        if (data.equals("admin:stats")) {
+            if (!botService.isAdmin(chatId)) {
+                answerCallback(callback.getId(), "Нет доступа.");
+                return;
+            }
+            showAdminStats(chatId);
+            answerCallback(callback.getId(), "Статистика.");
+            return;
+        }
+        if (data.equals("admin:export_stats")) {
+            if (!botService.isAdmin(chatId)) {
+                answerCallback(callback.getId(), "Нет доступа.");
+                return;
+            }
+            exportStatisticsCsv(chatId);
+            answerCallback(callback.getId(), "Экспорт готовится.");
+            return;
+        }
+        if (data.equals("mod:block_create")) {
+            if (!botService.isModeratorOrAdmin(chatId)) {
+                answerCallback(callback.getId(), "Нет доступа.");
+                return;
+            }
+            session.state = SessionState.WAITING_MOD_BLOCK_USER;
+            sendInputPrompt(chatId, "Введи @username или Telegram ID пользователя для запрета создания тестов.");
+            answerCallback(callback.getId(), "Жду пользователя.");
+            return;
+        }
+        if (data.equals("mod:unblock_create")) {
+            if (!botService.isModeratorOrAdmin(chatId)) {
+                answerCallback(callback.getId(), "Нет доступа.");
+                return;
+            }
+            session.state = SessionState.WAITING_MOD_UNBLOCK_USER;
+            sendInputPrompt(chatId, "Введи @username или Telegram ID пользователя для снятия запрета.");
+            answerCallback(callback.getId(), "Жду пользователя.");
+            return;
+        }
+        if (data.equals("mod:list_blocks")) {
+            if (!botService.isModeratorOrAdmin(chatId)) {
+                answerCallback(callback.getId(), "Нет доступа.");
+                return;
+            }
+            showRestrictionPanel(chatId);
+            answerCallback(callback.getId(), "Блокировки.");
             return;
         }
         if (data.equals("admin:list_roles")) {
@@ -855,7 +1106,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 return;
             }
             session.state = SessionState.WAITING_ADMIN_ADD_MODERATOR;
-            sendInputPrompt(chatId, "Введи Telegram ID пользователя, которого нужно сделать модератором.");
+            sendInputPrompt(chatId, "Введи @username известного пользователя или Telegram ID, которого нужно сделать модератором.");
             answerCallback(callback.getId(), "Жду ID.");
             return;
         }
@@ -865,7 +1116,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 return;
             }
             session.state = SessionState.WAITING_ADMIN_ADD_ADMIN;
-            sendInputPrompt(chatId, "Введи Telegram ID пользователя, которого нужно сделать администратором.");
+            sendInputPrompt(chatId, "Введи @username известного пользователя или Telegram ID, которого нужно сделать администратором.");
             answerCallback(callback.getId(), "Жду ID.");
             return;
         }
@@ -875,7 +1126,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 return;
             }
             session.state = SessionState.WAITING_ADMIN_REMOVE_ROLE;
-            sendInputPrompt(chatId, "Введи Telegram ID пользователя, у которого нужно снять специальную роль.");
+            sendInputPrompt(chatId, "Введи @username известного пользователя или Telegram ID, у которого нужно снять специальную роль.");
             answerCallback(callback.getId(), "Жду ID.");
             return;
         }
@@ -899,7 +1150,15 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             answerCallback(callback.getId(), "Этот вопрос уже обработан.");
             return;
         }
+        if (checkTotalTimeout(chatId, callback.getFrom(), test, runtime)) {
+            answerCallback(callback.getId(), "Время теста вышло.");
+            return;
+        }
         Question question = test.questions.get(questionIndex);
+        if (checkQuestionTimeout(chatId, callback.getFrom(), test, runtime, question)) {
+            answerCallback(callback.getId(), "Время на вопрос вышло.");
+            return;
+        }
         boolean correct = selectedIndex == question.correctOptionIndex;
 
         QuestionAnswerDetail detail = new QuestionAnswerDetail();
@@ -913,11 +1172,8 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             runtime.score++;
         }
 
-        if (Boolean.TRUE.equals(test.showCorrectAnswerImmediately)) {
-            editAnsweredQuestion(callback, test, questionIndex, selectedIndex, true);
-        } else {
-            editAnsweredQuestion(callback, test, questionIndex, selectedIndex, false);
-        }
+        boolean reveal = test.getEffectiveAnswerRevealMode() == AnswerRevealMode.IMMEDIATE;
+        editAnsweredQuestion(callback, test, questionIndex, selectedIndex, reveal);
         answerCallback(callback.getId(), correct ? "Верно!" : "Ответ принят.");
 
         runtime.questionIndex++;
@@ -971,11 +1227,28 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 test.questions.size(),
                 runtime.details);
 
+        AnswerRevealMode mode = test.getEffectiveAnswerRevealMode();
         StringBuilder sb = new StringBuilder();
-        sb.append("Тест завершён.\n\n")
-                .append("Название: ").append(test.title).append("\n")
+        sb.append("✅ Тест завершён\n")
+                .append("━━━━━━━━━━━━━━\n")
+                .append("📘 ").append(test.title).append("\n")
                 .append("Результат: ").append(saved.score).append("/").append(saved.total).append("\n")
                 .append("Процент: ").append(saved.getPercentText()).append("\n");
+
+        if (mode == AnswerRevealMode.END_ONLY || mode == AnswerRevealMode.IMMEDIATE) {
+            sb.append("\nРазбор ответов:\n");
+            for (int i = 0; i < runtime.details.size(); i++) {
+                QuestionAnswerDetail detail = runtime.details.get(i);
+                sb.append(i + 1).append(") ")
+                        .append(detail.correct ? "✅ " : "❌ ")
+                        .append(detail.questionText).append("\n")
+                        .append("Твой ответ: ").append(detail.userAnswer).append("\n")
+                        .append("Правильный ответ: ").append(detail.correctAnswer).append("\n\n");
+            }
+        } else {
+            sb.append("\nПравильные ответы скрыты настройками теста.\n");
+        }
+
         sendText(chatId, sb.toString(), MenuFactory.mainMenu(botService.getRole(chatId)));
     }
 
@@ -1044,7 +1317,8 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 .append("Автор: ").append(test.creatorName).append("\n")
                 .append("Описание: ").append(test.description == null ? "-" : test.description).append("\n")
                 .append("Вопросов: ").append(test.questions.size()).append("\n")
-                .append("Показ ответа сразу: ").append(Boolean.TRUE.equals(test.showCorrectAnswerImmediately) ? "Да" : "Нет").append("\n");
+                .append("Показ ответов: ").append(revealModeText(test.getEffectiveAnswerRevealMode())).append("\n")
+                .append("Время на тест: ").append(timeText(test.totalTimeLimitSeconds)).append("\n");
         sendInline(chatId, sb.toString(), MenuFactory.moderationActions(testId));
     }
 
@@ -1077,6 +1351,207 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             return user.getFirstName();
         }
         return "Пользователь";
+    }
+
+    private String revealModeText(AnswerRevealMode mode) {
+        if (mode == null) {
+            return "показывать сразу";
+        }
+        return switch (mode) {
+            case IMMEDIATE -> "показывать сразу";
+            case END_ONLY -> "показывать только в конце";
+            case NEVER -> "не показывать";
+        };
+    }
+
+    private String timeText(Integer seconds) {
+        if (seconds == null || seconds <= 0) {
+            return "без ограничения";
+        }
+        if (seconds < 60) {
+            return seconds + " сек.";
+        }
+        if (seconds % 60 == 0) {
+            return (seconds / 60) + " мин.";
+        }
+        return seconds + " сек.";
+    }
+
+    private String questionTypeText(QuestionType type) {
+        if (type == null) {
+            return "не указан";
+        }
+        return switch (type) {
+            case SINGLE_CHOICE -> "выбор варианта";
+            case TEXT_INPUT -> "текстовый ответ";
+            case NUMBER_INPUT -> "числовой ответ";
+        };
+    }
+
+    private String correctAnswerFor(Question question) {
+        if (question.type == QuestionType.SINGLE_CHOICE) {
+            if (question.correctOptionIndex == null || question.correctOptionIndex < 0 || question.correctOptionIndex >= question.options.size()) {
+                return "-";
+            }
+            return question.options.get(question.correctOptionIndex);
+        }
+        if (question.type == QuestionType.TEXT_INPUT) {
+            return question.correctTextAnswer;
+        }
+        return question.correctNumberAnswer == null ? "-" : TextUtils.formatNumber(question.correctNumberAnswer);
+    }
+
+    private boolean checkTotalTimeout(long chatId, User user, TestData test, QuizRuntime runtime) {
+        if (test.totalTimeLimitSeconds == null || test.totalTimeLimitSeconds <= 0) {
+            return false;
+        }
+        long elapsed = (System.currentTimeMillis() - runtime.startedAtMillis) / 1000;
+        if (elapsed <= test.totalTimeLimitSeconds) {
+            return false;
+        }
+        sendInline(chatId, "⏳ Время на тест вышло. Тест завершается.", MenuFactory.quizActionMenu());
+        finishQuiz(chatId, user, test, runtime);
+        return true;
+    }
+
+    private boolean checkQuestionTimeout(long chatId, User user, TestData test, QuizRuntime runtime, Question question) {
+        if (question.timeLimitSeconds == null || question.timeLimitSeconds <= 0) {
+            return false;
+        }
+        long elapsed = (System.currentTimeMillis() - runtime.questionStartedAtMillis) / 1000;
+        if (elapsed <= question.timeLimitSeconds) {
+            return false;
+        }
+        QuestionAnswerDetail detail = new QuestionAnswerDetail();
+        detail.questionText = question.text;
+        detail.questionType = question.type;
+        detail.userAnswer = "Время вышло";
+        detail.correctAnswer = correctAnswerFor(question);
+        detail.correct = false;
+        runtime.details.add(detail);
+        runtime.questionIndex++;
+        sendInline(chatId, "⏱ Время на вопрос вышло.", MenuFactory.quizActionMenu());
+        if (runtime.questionIndex < test.questions.size()) {
+            sendQuestion(chatId, test, runtime);
+        } else {
+            finishQuiz(chatId, user, test, runtime);
+        }
+        return true;
+    }
+
+    private void showUsersList(long chatId) {
+        StringBuilder sb = new StringBuilder("👥 Пользователи, которые писали боту\n\n");
+        List<KnownUser> users = botService.getKnownUsers();
+        if (users.isEmpty()) {
+            sb.append("Пользователей пока нет.");
+        }
+        for (KnownUser knownUser : users) {
+            sb.append("• ").append(knownUser.displayName())
+                    .append(" — роль: ").append(botService.getRole(knownUser.userId));
+            UserRestriction restriction = botService.getRestriction(knownUser.userId);
+            if (restriction != null && botService.isCreationBlocked(knownUser.userId)) {
+                sb.append(" — создание тестов заблокировано");
+            }
+            sb.append("\n");
+        }
+        sendInline(chatId, sb.toString(), MenuFactory.adminMenu());
+    }
+
+    private void showAdminStats(long chatId) {
+        List<TestData> tests = botService.getAllTests();
+        int attempts = botService.getTotalResultsCount();
+        StringBuilder sb = new StringBuilder("📈 Статистика системы\n\n")
+                .append("Пользователей: ").append(botService.getKnownUsers().size()).append("\n")
+                .append("Тестов: ").append(tests.size()).append("\n")
+                .append("Прохождений: ").append(attempts).append("\n\n")
+                .append("График по тестам:\n");
+        for (TestData test : tests) {
+            int count = test.results.size();
+            sb.append(TextUtils.shorten(test.title, 24)).append(" | ")
+                    .append("█".repeat(Math.min(count, 20)))
+                    .append(" ").append(count).append("\n");
+        }
+        sendInline(chatId, sb.toString(), MenuFactory.adminMenu());
+    }
+
+    private void showRestrictionPanel(long chatId) {
+        StringBuilder sb = new StringBuilder("🚫 Блокировки создания тестов\n\n");
+        List<Map.Entry<Long, UserRestriction>> restrictions = botService.getRestrictions();
+        if (restrictions.isEmpty()) {
+            sb.append("Активных ограничений нет.\n");
+        }
+        for (Map.Entry<Long, UserRestriction> entry : restrictions) {
+            UserRestriction restriction = entry.getValue();
+            sb.append("• ").append(botService.displayUser(entry.getKey())).append("\n")
+                    .append("До: ").append(restriction.blockedUntil == null ? "-" : restriction.blockedUntil.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append("\n")
+                    .append("Причина: ").append(restriction.reason == null ? "-" : restriction.reason).append("\n\n");
+        }
+        sendInline(chatId, sb.toString(), MenuFactory.moderationTools());
+    }
+
+    private void finishBlockUserStep(long chatId, String text) {
+        Long userId = botService.resolveKnownUserId(text);
+        if (userId == null) {
+            sendInputPrompt(chatId, "Пользователь не найден. Введи @username известного пользователя или числовой Telegram ID.");
+            return;
+        }
+        UserSession session = sessions.get(chatId);
+        session.restrictionTargetUserId = userId;
+        session.state = SessionState.WAITING_MOD_BLOCK_DAYS;
+        sendInputPrompt(chatId, "На сколько дней запретить создание тестов? Введи число.");
+    }
+
+    private void finishBlockDaysStep(long chatId, String text) {
+        try {
+            int days = Integer.parseInt(text.trim());
+            if (days <= 0) {
+                sendInputPrompt(chatId, "Количество дней должно быть положительным.");
+                return;
+            }
+            UserSession session = sessions.get(chatId);
+            session.restrictionDays = days;
+            session.state = SessionState.WAITING_MOD_BLOCK_REASON;
+            sendInputPrompt(chatId, "Укажи причину запрета.");
+        } catch (NumberFormatException e) {
+            sendInputPrompt(chatId, "Нужно ввести число дней.");
+        }
+    }
+
+    private void finishBlockReasonStep(long chatId, String text) {
+        UserSession session = sessions.get(chatId);
+        if (session.restrictionTargetUserId == null) {
+            session.state = SessionState.IDLE;
+            sendText(chatId, "Пользователь для блокировки не выбран.", MenuFactory.mainMenu(botService.getRole(chatId)));
+            return;
+        }
+        botService.blockCreation(session.restrictionTargetUserId, session.restrictionDays, text.trim());
+        Long targetId = session.restrictionTargetUserId;
+        session.state = SessionState.IDLE;
+        sendText(chatId, "Создание тестов запрещено пользователю " + botService.displayUser(targetId) + ".", MenuFactory.mainMenu(botService.getRole(chatId)));
+        sendText(targetId, "🚫 Тебе временно запрещено создавать тесты.\nПричина: " + text.trim(), MenuFactory.mainMenu(botService.getRole(targetId)));
+    }
+
+    private void finishUnblockUser(long chatId, String text) {
+        Long userId = botService.resolveKnownUserId(text);
+        if (userId == null) {
+            sendInputPrompt(chatId, "Пользователь не найден. Введи @username известного пользователя или числовой Telegram ID.");
+            return;
+        }
+        botService.unblockCreation(userId);
+        sessions.get(chatId).state = SessionState.IDLE;
+        sendText(chatId, "Запрет снят с пользователя " + botService.displayUser(userId) + ".", MenuFactory.mainMenu(botService.getRole(chatId)));
+        sendText(userId, "✅ Запрет на создание тестов снят.", MenuFactory.mainMenu(botService.getRole(userId)));
+    }
+
+    private void exportStatisticsCsv(long chatId) {
+        try {
+            Path file = Files.createTempFile("testmasterbot-statistics", ".csv");
+            Files.writeString(file, botService.buildStatisticsCsv(), StandardCharsets.UTF_8);
+            sendDocument(chatId, file, "Статистика TestMasterBot в CSV.");
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendText(chatId, "Не удалось сформировать CSV.", MenuFactory.mainMenu(botService.getRole(chatId)));
+        }
     }
 
     private void sendText(long chatId, String text, ReplyKeyboard keyboard) {
@@ -1150,6 +1625,31 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         }
     }
 
+    private void sendRemoveKeyboard(long chatId, String text) {
+        SendMessage message = SendMessage.builder()
+                .chatId(chatId)
+                .text(TextUtils.trimTelegramText(text))
+                .replyMarkup(ReplyKeyboardRemove.builder().removeKeyboard(true).build())
+                .build();
+        try {
+            telegramClient.execute(message);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void sendDocument(long chatId, Path path, String caption) {
+        try {
+            telegramClient.execute(SendDocument.builder()
+                    .chatId(chatId)
+                    .document(new InputFile(path.toFile()))
+                    .caption(caption)
+                    .build());
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
     private void answerCallback(String callbackId, String text) {
         try {
             telegramClient.execute(AnswerCallbackQuery.builder()
@@ -1179,6 +1679,8 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         String userName;
         int questionIndex = 0;
         int score = 0;
+        long startedAtMillis;
+        long questionStartedAtMillis;
         List<QuestionAnswerDetail> details = new ArrayList<>();
     }
 }

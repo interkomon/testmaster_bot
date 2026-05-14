@@ -3,6 +3,7 @@ package main.testmasterbot.service;
 import main.testmasterbot.model.*;
 import main.testmasterbot.repository.JsonDataStore;
 import main.testmasterbot.util.CodeGenerator;
+import org.telegram.telegrambots.meta.api.objects.User;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -22,13 +23,8 @@ public class BotService {
 
     public synchronized void bootstrapRolesFromEnv(String adminIds, String moderatorIds) {
         BotData data = store.load();
-
-
         applyRoleList(data, moderatorIds, Role.MODERATOR);
-
-        //  админ - приоритет
         applyRoleList(data, adminIds, Role.ADMIN);
-
         store.save();
     }
 
@@ -41,17 +37,66 @@ public class BotService {
         for (String part : parts) {
             try {
                 long id = Long.parseLong(part.trim());
-
                 Role existing = data.roles.get(id);
-
-
                 if (existing == Role.ADMIN && role == Role.MODERATOR) {
                     continue;
                 }
-
                 data.roles.put(id, role);
             } catch (Exception ignored) {
             }
+        }
+    }
+
+    public synchronized void rememberUser(User user) {
+        if (user == null) {
+            return;
+        }
+        BotData data = store.load();
+        KnownUser knownUser = data.knownUsers.getOrDefault(user.getId(), new KnownUser());
+        knownUser.userId = user.getId();
+        knownUser.username = user.getUserName();
+        knownUser.firstName = user.getFirstName();
+        knownUser.lastName = user.getLastName();
+        data.knownUsers.put(knownUser.userId, knownUser);
+        store.save();
+    }
+
+    public synchronized KnownUser getKnownUser(long userId) {
+        return store.load().knownUsers.get(userId);
+    }
+
+    public synchronized List<KnownUser> getKnownUsers() {
+        return store.load().knownUsers.values().stream()
+                .sorted(Comparator.comparing(user -> displayUser(user.userId).toLowerCase(Locale.ROOT)))
+                .toList();
+    }
+
+    public synchronized String displayUser(long userId) {
+        KnownUser user = store.load().knownUsers.get(userId);
+        if (user == null) {
+            return String.valueOf(userId);
+        }
+        return user.displayName();
+    }
+
+    public synchronized Long resolveKnownUserId(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String value = raw.trim();
+        if (value.startsWith("@")) {
+            String username = value.substring(1).toLowerCase(Locale.ROOT);
+            for (KnownUser user : store.load().knownUsers.values()) {
+                if (user.username != null && user.username.equalsIgnoreCase(username)) {
+                    return user.userId;
+                }
+            }
+            return null;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 
@@ -82,7 +127,49 @@ public class BotService {
 
     public synchronized List<Map.Entry<Long, Role>> getAllRoles() {
         return store.load().roles.entrySet().stream()
-                .sorted(Comparator.comparingLong(Map.Entry::getKey))
+                .sorted(Comparator.comparing(entry -> displayUser(entry.getKey()).toLowerCase(Locale.ROOT)))
+                .toList();
+    }
+
+    public synchronized boolean isCreationBlocked(long userId) {
+        UserRestriction restriction = store.load().restrictions.get(userId);
+        if (restriction == null || !restriction.creationBlocked) {
+            return false;
+        }
+        if (restriction.blockedUntil == null) {
+            return true;
+        }
+        if (restriction.blockedUntil.isAfter(LocalDateTime.now())) {
+            return true;
+        }
+        store.load().restrictions.remove(userId);
+        store.save();
+        return false;
+    }
+
+    public synchronized UserRestriction getRestriction(long userId) {
+        return store.load().restrictions.get(userId);
+    }
+
+    public synchronized void blockCreation(long userId, int days, String reason) {
+        BotData data = store.load();
+        UserRestriction restriction = new UserRestriction();
+        restriction.creationBlocked = true;
+        restriction.blockedUntil = LocalDateTime.now().plusDays(Math.max(1, days));
+        restriction.reason = reason;
+        data.restrictions.put(userId, restriction);
+        store.save();
+    }
+
+    public synchronized void unblockCreation(long userId) {
+        BotData data = store.load();
+        data.restrictions.remove(userId);
+        store.save();
+    }
+
+    public synchronized List<Map.Entry<Long, UserRestriction>> getRestrictions() {
+        return store.load().restrictions.entrySet().stream()
+                .sorted(Comparator.comparing(entry -> displayUser(entry.getKey()).toLowerCase(Locale.ROOT)))
                 .toList();
     }
 
@@ -93,9 +180,12 @@ public class BotService {
         draft.creatorId = creatorId;
         draft.creatorName = creatorName;
 
-        if (draft.showCorrectAnswerImmediately == null) {
-            draft.showCorrectAnswerImmediately = true;
+        if (draft.answerRevealMode == null) {
+            draft.answerRevealMode = Boolean.TRUE.equals(draft.showCorrectAnswerImmediately)
+                    ? AnswerRevealMode.IMMEDIATE
+                    : AnswerRevealMode.END_ONLY;
         }
+        draft.showCorrectAnswerImmediately = draft.answerRevealMode == AnswerRevealMode.IMMEDIATE;
 
         if (makePublic) {
             draft.status = isModeratorOrAdmin(creatorId)
@@ -113,6 +203,12 @@ public class BotService {
     public synchronized List<TestData> getUserTests(long userId) {
         return store.load().tests.values().stream()
                 .filter(test -> test.creatorId == userId)
+                .sorted(Comparator.comparing(test -> safeLower(test.title)))
+                .toList();
+    }
+
+    public synchronized List<TestData> getAllTests() {
+        return store.load().tests.values().stream()
                 .sorted(Comparator.comparing(test -> safeLower(test.title)))
                 .toList();
     }
@@ -167,6 +263,23 @@ public class BotService {
         }
     }
 
+    public synchronized void updateAnswerRevealMode(String testId, AnswerRevealMode mode) {
+        TestData test = store.load().tests.get(testId);
+        if (test != null) {
+            test.answerRevealMode = mode;
+            test.showCorrectAnswerImmediately = mode == AnswerRevealMode.IMMEDIATE;
+            store.save();
+        }
+    }
+
+    public synchronized void updateTotalTimeLimit(String testId, Integer seconds) {
+        TestData test = store.load().tests.get(testId);
+        if (test != null) {
+            test.totalTimeLimitSeconds = seconds;
+            store.save();
+        }
+    }
+
     public synchronized void toggleTestAccess(String testId, long actorId) {
         TestData test = store.load().tests.get(testId);
         if (test == null) {
@@ -191,20 +304,22 @@ public class BotService {
         }
     }
 
-    public synchronized void approveTest(String testId) {
+    public synchronized TestData approveTest(String testId) {
         TestData test = store.load().tests.get(testId);
         if (test != null) {
             test.status = PublicationStatus.APPROVED;
             store.save();
         }
+        return test;
     }
 
-    public synchronized void rejectTest(String testId) {
+    public synchronized TestData rejectTest(String testId) {
         TestData test = store.load().tests.get(testId);
         if (test != null) {
             test.status = PublicationStatus.REJECTED;
             store.save();
         }
+        return test;
     }
 
     public synchronized void deleteTest(String testId) {
@@ -212,11 +327,13 @@ public class BotService {
         store.save();
     }
 
+    /** Старый метод оставлен для совместимости с уже имеющимися кнопками. */
     public synchronized void toggleShowCorrectAnswerImmediately(String testId) {
         TestData test = store.load().tests.get(testId);
         if (test != null) {
-            boolean current = Boolean.TRUE.equals(test.showCorrectAnswerImmediately);
-            test.showCorrectAnswerImmediately = !current;
+            AnswerRevealMode current = test.getEffectiveAnswerRevealMode();
+            test.answerRevealMode = current == AnswerRevealMode.IMMEDIATE ? AnswerRevealMode.END_ONLY : AnswerRevealMode.IMMEDIATE;
+            test.showCorrectAnswerImmediately = test.answerRevealMode == AnswerRevealMode.IMMEDIATE;
             store.save();
         }
     }
@@ -261,6 +378,30 @@ public class BotService {
                 .orElse(null);
     }
 
+    public synchronized int getTotalResultsCount() {
+        int count = 0;
+        for (TestData test : store.load().tests.values()) {
+            count += test.results.size();
+        }
+        return count;
+    }
+
+    public synchronized String buildStatisticsCsv() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("test_id;title;creator;status;questions;attempts;avg_percent\n");
+        for (TestData test : getAllTests()) {
+            sb.append(test.testId).append(';')
+                    .append(escapeCsv(test.title)).append(';')
+                    .append(escapeCsv(displayUser(test.creatorId))).append(';')
+                    .append(test.status).append(';')
+                    .append(test.questions.size()).append(';')
+                    .append(test.results.size()).append(';')
+                    .append(String.format(Locale.US, "%.1f", test.averagePercent()))
+                    .append('\n');
+        }
+        return sb.toString();
+    }
+
     private void ensureSeedData() {
         BotData data = store.load();
         if (!data.tests.isEmpty()) {
@@ -275,7 +416,9 @@ public class BotService {
         demo.title = "Демо-тест по Java";
         demo.description = "Демонстрационный тест с разными типами вопросов.";
         demo.status = PublicationStatus.APPROVED;
+        demo.answerRevealMode = AnswerRevealMode.IMMEDIATE;
         demo.showCorrectAnswerImmediately = true;
+        demo.totalTimeLimitSeconds = null;
         demo.questions = new ArrayList<>();
 
         Question q1 = new Question();
@@ -283,18 +426,21 @@ public class BotService {
         q1.type = QuestionType.SINGLE_CHOICE;
         q1.options = List.of("String", "int", "boolean", "double");
         q1.correctOptionIndex = 1;
+        q1.timeLimitSeconds = 60;
         demo.questions.add(q1);
 
         Question q2 = new Question();
         q2.text = "Как называется точка входа в Java-программу?";
         q2.type = QuestionType.TEXT_INPUT;
         q2.correctTextAnswer = "main";
+        q2.timeLimitSeconds = 60;
         demo.questions.add(q2);
 
         Question q3 = new Question();
         q3.text = "Сколько будет 2 + 2?";
         q3.type = QuestionType.NUMBER_INPUT;
         q3.correctNumberAnswer = 4.0;
+        q3.timeLimitSeconds = 30;
         demo.questions.add(q3);
 
         data.tests.put(demo.testId, demo);
@@ -303,5 +449,16 @@ public class BotService {
 
     private String safeLower(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT);
+    }
+
+    private String escapeCsv(String value) {
+        if (value == null) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(";") || escaped.contains("\n") || escaped.contains("\"")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
     }
 }
