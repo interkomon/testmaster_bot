@@ -8,4 +8,5 @@ public class BotData {
     public Map<Long, Role> roles = new HashMap<>();
     public Map<Long, KnownUser> knownUsers = new HashMap<>();
     public Map<Long, UserRestriction> restrictions = new HashMap<>();
+    public Map<String, SupportRequest> supportRequests = new HashMap<>();
 }

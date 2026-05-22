@@ -15,6 +15,8 @@ public class TestResult {
     public int score;
     public int total;
     public LocalDateTime completedAt;
+    public boolean aborted;
+    public String finishReason;
     public List<QuestionAnswerDetail> details = new ArrayList<>();
 
     @JsonIgnore

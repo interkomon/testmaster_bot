@@ -1,7 +1,7 @@
 package main.testmasterbot.service;
 
 import main.testmasterbot.model.*;
-import main.testmasterbot.repository.JsonDataStore;
+import main.testmasterbot.repository.DataStore;
 import main.testmasterbot.util.CodeGenerator;
 import org.telegram.telegrambots.meta.api.objects.User;
 
@@ -11,12 +11,13 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.StringJoiner;
 
 public class BotService {
-    private final JsonDataStore store;
+    private final DataStore store;
     private final CodeGenerator codeGenerator = new CodeGenerator();
 
-    public BotService(JsonDataStore store) {
+    public BotService(DataStore store) {
         this.store = store;
         ensureSeedData();
     }
@@ -161,6 +162,16 @@ public class BotService {
         store.save();
     }
 
+    public synchronized void blockCreationForever(long userId, String reason) {
+        BotData data = store.load();
+        UserRestriction restriction = new UserRestriction();
+        restriction.creationBlocked = true;
+        restriction.blockedUntil = null;
+        restriction.reason = reason == null || reason.isBlank() ? "Блокировка без срока" : reason;
+        data.restrictions.put(userId, restriction);
+        store.save();
+    }
+
     public synchronized void unblockCreation(long userId) {
         BotData data = store.load();
         data.restrictions.remove(userId);
@@ -176,7 +187,6 @@ public class BotService {
     public synchronized TestData saveNewTest(TestData draft, long creatorId, String creatorName, boolean makePublic) {
         BotData data = store.load();
         draft.testId = codeGenerator.generateTestId(data);
-        draft.accessCode = codeGenerator.generateAccessCode(data);
         draft.creatorId = creatorId;
         draft.creatorName = creatorName;
 
@@ -234,13 +244,18 @@ public class BotService {
     public synchronized TestData resolveTestByCode(long requesterId, String code) {
         String normalized = code.trim().toUpperCase(Locale.ROOT);
         for (TestData test : store.load().tests.values()) {
-            if (test.isPublicVisible() && normalized.equalsIgnoreCase(test.testId)) {
+            if (!normalized.equalsIgnoreCase(test.testId)) {
+                continue;
+            }
+
+            // Один код запуска = TestId.
+            // Опубликованные и приватные тесты можно пройти по коду запуска.
+            if (test.status == PublicationStatus.APPROVED || test.status == PublicationStatus.PRIVATE) {
                 return test;
             }
-            if (normalized.equalsIgnoreCase(test.accessCode)) {
-                return test;
-            }
-            if (test.creatorId == requesterId && normalized.equalsIgnoreCase(test.testId)) {
+
+            // На модерации/отклонённые тесты доступны только автору, модератору или администратору.
+            if (test.creatorId == requesterId || isModeratorOrAdmin(requesterId)) {
                 return test;
             }
         }
@@ -340,6 +355,12 @@ public class BotService {
 
     public synchronized TestResult appendResult(String testId, long userId, String userName, int score,
                                                 int total, List<QuestionAnswerDetail> details) {
+        return appendResult(testId, userId, userName, score, total, details, false, "Завершён");
+    }
+
+    public synchronized TestResult appendResult(String testId, long userId, String userName, int score,
+                                                int total, List<QuestionAnswerDetail> details,
+                                                boolean aborted, String finishReason) {
         TestData test = store.load().tests.get(testId);
         if (test == null) {
             return null;
@@ -351,6 +372,8 @@ public class BotService {
         result.score = score;
         result.total = total;
         result.completedAt = LocalDateTime.now();
+        result.aborted = aborted;
+        result.finishReason = finishReason;
         result.details = new ArrayList<>(details);
         test.results.add(result);
         store.save();
@@ -388,19 +411,160 @@ public class BotService {
 
     public synchronized String buildStatisticsCsv() {
         StringBuilder sb = new StringBuilder();
-        sb.append("test_id;title;creator;status;questions;attempts;avg_percent\n");
+        sb.append("test_id;title;creator;status;questions;attempts;finished;aborted;avg_percent\n");
         for (TestData test : getAllTests()) {
+            long aborted = test.results.stream().filter(result -> result.aborted).count();
+            long finished = test.results.size() - aborted;
             sb.append(test.testId).append(';')
                     .append(escapeCsv(test.title)).append(';')
                     .append(escapeCsv(displayUser(test.creatorId))).append(';')
                     .append(test.status).append(';')
                     .append(test.questions.size()).append(';')
                     .append(test.results.size()).append(';')
+                    .append(finished).append(';')
+                    .append(aborted).append(';')
                     .append(String.format(Locale.US, "%.1f", test.averagePercent()))
                     .append('\n');
         }
         return sb.toString();
     }
+
+    public synchronized String buildUsersCsv() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("user_id;username;name;role;creation_blocked;blocked_until;reason\n");
+        for (KnownUser user : getKnownUsers()) {
+            UserRestriction restriction = store.load().restrictions.get(user.userId);
+            sb.append(user.userId).append(';')
+                    .append(escapeCsv(user.username == null ? "" : "@" + user.username)).append(';')
+                    .append(escapeCsv(user.displayName())).append(';')
+                    .append(getRole(user.userId)).append(';')
+                    .append(isCreationBlocked(user.userId)).append(';')
+                    .append(restriction == null || restriction.blockedUntil == null ? "" : restriction.blockedUntil).append(';')
+                    .append(escapeCsv(restriction == null ? "" : restriction.reason))
+                    .append('\n');
+        }
+        return sb.toString();
+    }
+
+    public synchronized String buildResultsCsv() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("test_id;test_title;user;score;total;percent;status;finish_reason;completed_at\n");
+        for (TestData test : getAllTests()) {
+            for (TestResult result : test.results) {
+                sb.append(test.testId).append(';')
+                        .append(escapeCsv(test.title)).append(';')
+                        .append(escapeCsv(result.userName)).append(';')
+                        .append(result.score).append(';')
+                        .append(result.total).append(';')
+                        .append(String.format(Locale.US, "%.1f", result.getPercent())).append(';')
+                        .append(result.aborted ? "aborted" : "finished").append(';')
+                        .append(escapeCsv(result.finishReason)).append(';')
+                        .append(result.completedAt == null ? "" : result.completedAt)
+                        .append('\n');
+            }
+        }
+        return sb.toString();
+    }
+
+    public synchronized String buildAnswerDetailsCsv() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("test_id;test_title;user;question;user_answer;correct_answer;correct\n");
+        for (TestData test : getAllTests()) {
+            for (TestResult result : test.results) {
+                for (QuestionAnswerDetail detail : result.details) {
+                    sb.append(test.testId).append(';')
+                            .append(escapeCsv(test.title)).append(';')
+                            .append(escapeCsv(result.userName)).append(';')
+                            .append(escapeCsv(detail.questionText)).append(';')
+                            .append(escapeCsv(detail.userAnswer)).append(';')
+                            .append(escapeCsv(detail.correctAnswer)).append(';')
+                            .append(detail.correct)
+                            .append('\n');
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    public synchronized String exportTestAsText(String testId) {
+        TestData test = getTestById(testId);
+        if (test == null) {
+            return "Тест не найден";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("TEST_MASTER_BOT_EXPORT\n");
+        sb.append("Название: ").append(test.title).append("\n");
+        sb.append("Описание: ").append(test.description == null ? "" : test.description).append("\n");
+        sb.append("Код запуска: ").append(test.testId).append("\n");
+        sb.append("Статус: ").append(test.status).append("\n");
+        sb.append("Время теста: ").append(test.totalTimeLimitSeconds == null ? "без ограничения" : test.totalTimeLimitSeconds + " сек.").append("\n");
+        sb.append("Показ ответов: ").append(test.getEffectiveAnswerRevealMode()).append("\n\n");
+        for (int i = 0; i < test.questions.size(); i++) {
+            Question q = test.questions.get(i);
+            sb.append("Вопрос ").append(i + 1).append(": ").append(q.text).append("\n");
+            sb.append("Тип: ").append(q.type).append("\n");
+            if (q.type == QuestionType.SINGLE_CHOICE) {
+                for (int j = 0; j < q.options.size(); j++) {
+                    sb.append(j + 1).append(") ").append(q.options.get(j)).append("\n");
+                }
+                sb.append("Правильный вариант: ").append(q.correctOptionIndex == null ? "" : q.correctOptionIndex + 1).append("\n");
+            } else if (q.type == QuestionType.TEXT_INPUT) {
+                sb.append("Правильный ответ: ").append(q.correctTextAnswer).append("\n");
+            } else {
+                sb.append("Правильное число: ").append(q.correctNumberAnswer).append("\n");
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+    public synchronized SupportRequest createSupportRequest(long userId, String userName, String text) {
+        BotData data = store.load();
+        SupportRequest request = new SupportRequest();
+        request.requestId = codeGenerator.generateResultId();
+        request.userId = userId;
+        request.userName = userName;
+        request.text = text;
+        request.createdAt = LocalDateTime.now();
+        request.answered = false;
+        data.supportRequests.put(request.requestId, request);
+        store.save();
+        return request;
+    }
+
+    public synchronized List<SupportRequest> getSupportRequests() {
+        return store.load().supportRequests.values().stream()
+                .sorted(Comparator.comparing((SupportRequest request) -> request.createdAt == null ? LocalDateTime.MIN : request.createdAt).reversed())
+                .toList();
+    }
+
+    public synchronized SupportRequest getSupportRequest(String requestId) {
+        return store.load().supportRequests.get(requestId);
+    }
+
+    public synchronized SupportRequest answerSupportRequest(String requestId, long responderId, String responderName, String answer) {
+        BotData data = store.load();
+        SupportRequest request = data.supportRequests.get(requestId);
+        if (request == null) {
+            return null;
+        }
+        request.answered = true;
+        request.responderId = responderId;
+        request.responderName = responderName;
+        request.answer = answer;
+        request.answeredAt = LocalDateTime.now();
+        store.save();
+        return request;
+    }
+
+    public synchronized SupportRequest getLatestAnsweredSupportForUser(long userId) {
+        return store.load().supportRequests.values().stream()
+                .filter(request -> request.userId == userId && request.answered)
+                .sorted(Comparator.comparing((SupportRequest request) -> request.answeredAt == null ? LocalDateTime.MIN : request.answeredAt).reversed())
+                .findFirst()
+                .orElse(null);
+    }
+
 
     private void ensureSeedData() {
         BotData data = store.load();
@@ -410,7 +574,6 @@ public class BotService {
 
         TestData demo = new TestData();
         demo.testId = codeGenerator.generateTestId(data);
-        demo.accessCode = codeGenerator.generateAccessCode(data);
         demo.creatorId = 0L;
         demo.creatorName = "System";
         demo.title = "Демо-тест по Java";
@@ -426,21 +589,18 @@ public class BotService {
         q1.type = QuestionType.SINGLE_CHOICE;
         q1.options = List.of("String", "int", "boolean", "double");
         q1.correctOptionIndex = 1;
-        q1.timeLimitSeconds = 60;
         demo.questions.add(q1);
 
         Question q2 = new Question();
         q2.text = "Как называется точка входа в Java-программу?";
         q2.type = QuestionType.TEXT_INPUT;
         q2.correctTextAnswer = "main";
-        q2.timeLimitSeconds = 60;
         demo.questions.add(q2);
 
         Question q3 = new Question();
         q3.text = "Сколько будет 2 + 2?";
         q3.type = QuestionType.NUMBER_INPUT;
         q3.correctNumberAnswer = 4.0;
-        q3.timeLimitSeconds = 30;
         demo.questions.add(q3);
 
         data.tests.put(demo.testId, demo);

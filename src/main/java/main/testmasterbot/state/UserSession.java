@@ -16,6 +16,8 @@ public class UserSession {
 
     public Long restrictionTargetUserId;
     public int restrictionDays;
+    public boolean restrictionForever;
+    public String selectedSupportRequestId;
 
     public void resetCurrentQuestion() {
         draftQuestion = new Question();

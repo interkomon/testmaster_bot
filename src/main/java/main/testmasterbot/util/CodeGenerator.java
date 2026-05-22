@@ -13,9 +13,6 @@ public class CodeGenerator {
         return uniqueCode(data, "TST", 8);
     }
 
-    public String generateAccessCode(BotData data) {
-        return uniqueCode(data, "ACC", 10);
-    }
 
     public String generateResultId() {
         return "RES" + randomString(8);
@@ -26,7 +23,7 @@ public class CodeGenerator {
             String code = prefix + randomString(randomLength);
             boolean exists = false;
             for (TestData test : data.tests.values()) {
-                if (code.equalsIgnoreCase(test.testId) || code.equalsIgnoreCase(test.accessCode)) {
+                if (code.equalsIgnoreCase(test.testId)) {
                     exists = true;
                     break;
                 }

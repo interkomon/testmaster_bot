@@ -7,7 +7,6 @@ import java.util.List;
 
 public class TestData {
     public String testId;
-    public String accessCode;
     public long creatorId;
     public String creatorName;
     public String title;

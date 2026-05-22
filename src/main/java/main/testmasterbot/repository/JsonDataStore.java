@@ -8,7 +8,7 @@ import main.testmasterbot.model.BotData;
 import java.io.File;
 import java.io.IOException;
 
-public class JsonDataStore {
+public class JsonDataStore implements DataStore {
     private final File file;
     private final ObjectMapper mapper;
     private BotData cachedData;
