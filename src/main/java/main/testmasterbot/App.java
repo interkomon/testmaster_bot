@@ -11,7 +11,7 @@ public class App {
     public static void main(String[] args) throws Exception {
         String botToken = System.getenv("TELEGRAM_BOT_TOKEN");
         if (botToken == null || botToken.isBlank()) {
-            System.out.println("Ошибка: не задан токен бота. Укажи TELEGRAM_BOT_TOKEN.");
+            System.out.println("Ошибка: не задан токен бота.");
             return;
         }
 
@@ -21,7 +21,6 @@ public class App {
 
         if (dbUrl == null || dbUrl.isBlank()) {
             System.out.println("Ошибка: не задана строка подключения DB_URL.");
-            System.out.println("Пример: jdbc:sqlserver://localhost:1433;databaseName=TestMasterBotDb;encrypt=true;trustServerCertificate=true");
             return;
         }
 
