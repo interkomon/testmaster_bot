@@ -575,7 +575,7 @@ public class BotService {
         TestData demo = new TestData();
         demo.testId = codeGenerator.generateTestId(data);
         demo.creatorId = 0L;
-        demo.creatorName = "System";
+        demo.creatorName = "67";
         demo.title = "Демо-тест по Java";
         demo.description = "Демонстрационный тест с разными типами вопросов.";
         demo.status = PublicationStatus.APPROVED;

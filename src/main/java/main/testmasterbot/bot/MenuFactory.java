@@ -357,7 +357,6 @@ public final class MenuFactory {
                 InlineKeyboardButton.builder().text("▶ Запустить").callbackData("play:" + test.testId).build()
         ));
         rows.add(new InlineKeyboardRow(
-                InlineKeyboardButton.builder().text("📤 Экспорт теста").callbackData("export_test:" + test.testId).build(),
                 InlineKeyboardButton.builder().text("🗑 Удалить").callbackData("delete:" + test.testId).build()
         ));
         if (test.status == PublicationStatus.REJECTED || test.status == PublicationStatus.PRIVATE) {
@@ -384,8 +383,7 @@ public final class MenuFactory {
                 InlineKeyboardButton.builder().text("▶ Запустить").callbackData("play:" + test.testId).build()
         ));
         rows.add(new InlineKeyboardRow(
-                InlineKeyboardButton.builder().text("📊 Результаты").callbackData("results:" + test.testId).build(),
-                InlineKeyboardButton.builder().text("📤 Экспорт").callbackData("export_test:" + test.testId).build()
+                InlineKeyboardButton.builder().text("📊 Результаты").callbackData("results:" + test.testId).build()
         ));
         rows.add(new InlineKeyboardRow(
                 InlineKeyboardButton.builder().text("🗑 Удалить тест").callbackData("admin_delete:" + test.testId).build()

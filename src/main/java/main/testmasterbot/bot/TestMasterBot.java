@@ -14,6 +14,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -41,6 +42,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import static main.testmasterbot.util.TextUtils.trimCaption;
+
 public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
 
     private static final int MAX_TEST_TITLE_LENGTH = 80;
@@ -60,7 +63,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         this.telegramClient = new OkHttpTelegramClient(botToken);
         this.botService = botService;
         this.botUsername = System.getenv("TELEGRAM_BOT_USERNAME");
-        this.quizTimerExecutor.scheduleAtFixedRate(this::tickQuizTimers, 1, 5, TimeUnit.SECONDS);
+        this.quizTimerExecutor.scheduleAtFixedRate(this::tickQuizTimers, 0, 1, TimeUnit.SECONDS);
     }
 
     @Override
@@ -303,19 +306,19 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         sb.append("Привет, ").append(userName).append("!\n\n")
                 .append("Твоя роль: ").append(roleText).append("\n\n")
                 .append("Возможности:\n")
-                .append("• Создание тестов\n")
-                .append("• Описание теста\n")
-                .append("• Вопросы с вариантами, текстом и числами\n")
-                .append("• Фото к вопросам\n")
-                .append("• Приватные коды и ссылки\n")
-                .append("• Подробные результаты прохождения\n");
+                .append("- Создание тестов\n")
+                .append("- Описание теста\n")
+                .append("- Вопросы с вариантами, текстом и числами\n")
+                .append("- Фото к вопросам\n")
+                .append("- Приватные коды и ссылки\n")
+                .append("- Подробные результаты прохождения\n");
         if (role == Role.MODERATOR || role == Role.ADMIN) {
-            sb.append("• Меню модератора доступно\n");
+            sb.append("- Меню модератора доступно\n");
         }
         if (role == Role.ADMIN) {
-            sb.append("• Меню администратора доступно\n");
+            sb.append("- Меню администратора доступно\n");
         }
-        sb.append("\nЗапустить тест можно через команду /play CODE");
+        sb.append("\nЗапустить прохождение теста можно через команду /play CODE");
         return sb.toString();
     }
     private String roleToText(Role role) {
@@ -1273,17 +1276,6 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             }
             return;
         }
-        if (data.startsWith("export_test:")) {
-            String testId = data.substring("export_test:".length());
-            TestData test = botService.getTestById(testId);
-            if (test == null || (test.creatorId != chatId && !botService.isAdmin(chatId))) {
-                answerCallback(callback.getId(), "Нет доступа.");
-                return;
-            }
-            exportTestText(chatId, testId);
-            answerCallback(callback.getId(), "Экспорт теста.");
-            return;
-        }
         if (data.startsWith("share:")) {
             String testId = data.substring(6);
             TestData test = botService.getTestById(testId);
@@ -1672,9 +1664,10 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
     private void editAnsweredQuestion(CallbackQuery callback, TestData test, int questionIndex, int selectedIndex, boolean revealCorrect) {
         Question question = test.questions.get(questionIndex);
         StringBuilder sb = new StringBuilder();
-        sb.append("Тест: ").append(test.title)
-                .append("\nВопрос ").append(questionIndex + 1).append("/").append(test.questions.size())
-                .append("\n\n")
+        sb.append("📘 ").append(test.title)
+                .append("\n━━━━━━━━━━━━━━")
+                .append("\nВопрос ").append(questionIndex + 1).append(" из ").append(test.questions.size())
+                .append("\n\n❓ ")
                 .append(question.text)
                 .append("\n\n");
         for (int i = 0; i < question.options.size(); i++) {
@@ -1691,18 +1684,41 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             sb.append(prefix).append(question.options.get(i)).append("\n");
         }
 
-        EditMessageText edit = EditMessageText.builder()
-                .chatId(callback.getMessage().getChatId())
-                .messageId(callback.getMessage().getMessageId())
-                .text(TextUtils.trimTelegramText(sb.toString()))
-                .build();
-        try {
-            telegramClient.execute(edit);
-        } catch (TelegramApiException e) {
-            e.printStackTrace();
-        }
+        editQuestionCardMessage(callback, sb.toString());
     }
 
+    private void editQuestionCardMessage(CallbackQuery callback, String text) {
+        Long chatId = callback.getMessage().getChatId();
+        Integer messageId = callback.getMessage().getMessageId();
+
+        try {
+            if (callback.getMessage() instanceof Message message) {
+                if (message.getText() != null) {
+                    telegramClient.execute(EditMessageText.builder()
+                            .chatId(chatId)
+                            .messageId(messageId)
+                            .text(TextUtils.trimTelegramText(text))
+                            .build());
+                    return;
+                }
+
+                if (message.getCaption() != null) {
+                    telegramClient.execute(EditMessageCaption.builder()
+                            .chatId(chatId)
+                            .messageId(messageId)
+                            .caption(trimCaption(text))
+                            .build());
+                    return;
+                }
+            }
+
+            sendText(chatId, text, MenuFactory.quizLockedMenu());
+
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+            sendText(chatId, text, MenuFactory.quizLockedMenu());
+        }
+    }
 
     private void replaceAnswerDetail(QuizRuntime runtime, int questionIndex, QuestionAnswerDetail detail) {
         while (runtime.details.size() <= questionIndex) {
@@ -1726,6 +1742,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         runtime.awaitingConfirmation = true;
         runtime.editingQuestionIndex = -1;
         runtime.questionIndex = test.questions.size();
+        runtime.reviewScreenType = "review";
 
         StringBuilder sb = new StringBuilder();
         sb.append("🧾 Ответы приняты\n")
@@ -1735,7 +1752,8 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 .append("Выбери действие:\n")
                 .append("✅ завершить и сохранить результат;\n")
                 .append("🔁 выбрать вопрос и исправить ответ.");
-        sendInline(chatId, sb.toString(), MenuFactory.quizReviewMenu(timerLabel(test, runtime)));
+        Message sent = sendInline(chatId, sb.toString(), MenuFactory.quizReviewMenu(timerLabel(test, runtime)));
+        rememberReviewMessage(runtime, chatId, sent, timerLabel(test, runtime), "review");
     }
 
     private void showQuizCorrectionMenu(long chatId, TestData test, QuizRuntime runtime) {
@@ -1751,7 +1769,8 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 .append("Текущий результат не сохраняется, пока ты не нажмёшь «Завершить и сохранить».\n")
                 .append("Время теста продолжает идти.");
 
-        sendInline(chatId, sb.toString(), MenuFactory.quizCorrectionMenu(test.questions.size(), timerLabel(test, runtime)));
+        Message sent = sendInline(chatId, sb.toString(), MenuFactory.quizCorrectionMenu(test.questions.size(), timerLabel(test, runtime)));
+        rememberReviewMessage(runtime, chatId, sent, timerLabel(test, runtime), "correction");
     }
 
     private void showQuizAnswerReview(long chatId, TestData test, QuizRuntime runtime) {
@@ -1774,12 +1793,23 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
             sb.append("Правильные ответы скрыты настройками теста.\n\n");
         }
         sb.append("Чтобы изменить ответ, нажми «Исправить ответы» и выбери номер вопроса.");
-        sendInline(chatId, TextUtils.trimTelegramText(sb.toString()), MenuFactory.quizReviewMenu(timerLabel(test, runtime)));
+        Message sent = sendInline(chatId, TextUtils.trimTelegramText(sb.toString()), MenuFactory.quizReviewMenu(timerLabel(test, runtime)));
+        rememberReviewMessage(runtime, chatId, sent, timerLabel(test, runtime), "review");
     }
 
     private void rememberQuestionMessage(QuizRuntime runtime, long chatId, Message sent, String timerText) {
         runtime.cardChatId = chatId;
         runtime.questionMessageId = sent == null ? null : sent.getMessageId();
+        runtime.reviewMessageId = null;
+        runtime.reviewScreenType = null;
+        runtime.lastTimerText = timerText;
+    }
+
+    private void rememberReviewMessage(QuizRuntime runtime, long chatId, Message sent, String timerText, String screenType) {
+        runtime.cardChatId = chatId;
+        runtime.reviewMessageId = sent == null ? null : sent.getMessageId();
+        runtime.questionMessageId = null;
+        runtime.reviewScreenType = screenType;
         runtime.lastTimerText = timerText;
     }
 
@@ -1803,8 +1833,8 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
     }
 
     private void tickQuizTimers() {
-        try {
-            for (Map.Entry<Long, QuizRuntime> entry : quizSessions.entrySet()) {
+        for (Map.Entry<Long, QuizRuntime> entry : quizSessions.entrySet()) {
+            try {
                 long chatId = entry.getKey();
                 QuizRuntime runtime = entry.getValue();
                 if (runtime == null) {
@@ -1817,14 +1847,17 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 if (checkTotalTimeout(chatId, null, test, runtime)) {
                     continue;
                 }
+
                 if (runtime.awaitingConfirmation || runtime.questionIndex >= test.questions.size()) {
+                    updateReviewTimerMarkup(chatId, test, runtime);
                     continue;
                 }
+
                 Question question = test.questions.get(runtime.questionIndex);
                 updateQuestionTimerMarkup(chatId, test, runtime, question);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
     }
 
@@ -1839,14 +1872,39 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         InlineKeyboardMarkup markup = question.type == QuestionType.SINGLE_CHOICE
                 ? MenuFactory.answerButtons(test.testId, runtime.questionIndex, question.options.size(), timer)
                 : MenuFactory.quizActionMenu(timer);
+        editMessageReplyMarkup(chatId, runtime.questionMessageId, markup);
+        runtime.lastTimerText = timer;
+    }
+
+    private void updateReviewTimerMarkup(long chatId, TestData test, QuizRuntime runtime) {
+        if (runtime.reviewMessageId == null) {
+            return;
+        }
+        String timer = timerLabel(test, runtime);
+        if (timer.equals(runtime.lastTimerText)) {
+            return;
+        }
+
+        InlineKeyboardMarkup markup;
+        if ("correction".equals(runtime.reviewScreenType)) {
+            markup = MenuFactory.quizCorrectionMenu(test.questions.size(), timer);
+        } else {
+            markup = MenuFactory.quizReviewMenu(timer);
+        }
+
+        editMessageReplyMarkup(chatId, runtime.reviewMessageId, markup);
+        runtime.lastTimerText = timer;
+    }
+
+    private void editMessageReplyMarkup(long chatId, int messageId, InlineKeyboardMarkup markup) {
         try {
             telegramClient.execute(EditMessageReplyMarkup.builder()
                     .chatId(chatId)
-                    .messageId(runtime.questionMessageId)
+                    .messageId(messageId)
                     .replyMarkup(markup)
                     .build());
-            runtime.lastTimerText = timer;
-        } catch (TelegramApiException ignored) {
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
         }
     }
 
@@ -2236,13 +2294,13 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
     }
 
     private void showUsersList(long chatId) {
-        StringBuilder sb = new StringBuilder("👥 Пользователи, которые писали боту\n\n");
+        StringBuilder sb = new StringBuilder("👥 Пользователи, использовавшие бота\n\n");
         List<KnownUser> users = botService.getKnownUsers();
         if (users.isEmpty()) {
             sb.append("Пользователей пока нет.");
         }
         for (KnownUser knownUser : users) {
-            sb.append("• ").append(knownUser.displayName())
+            sb.append("- ").append(knownUser.displayName())
                     .append(" — роль: ").append(botService.getRole(knownUser.userId));
             UserRestriction restriction = botService.getRestriction(knownUser.userId);
             if (restriction != null && botService.isCreationBlocked(knownUser.userId)) {
@@ -2278,7 +2336,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         }
         for (Map.Entry<Long, UserRestriction> entry : restrictions) {
             UserRestriction restriction = entry.getValue();
-            sb.append("• ").append(botService.displayUser(entry.getKey())).append("\n")
+            sb.append("- ").append(botService.displayUser(entry.getKey())).append("\n")
                     .append("До: ").append(restriction.blockedUntil == null ? "навсегда" : restriction.blockedUntil.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append("\n")
                     .append("Причина: ").append(restriction.reason == null ? "-" : restriction.reason).append("\n\n");
         }
@@ -2293,7 +2351,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         }
         StringBuilder sb = new StringBuilder("🧾 Все тесты в системе\n\n");
         for (TestData test : tests) {
-            sb.append("• ").append(test.title).append("\n")
+            sb.append("- ").append(test.title).append("\n")
                     .append("Автор: ").append(botService.displayUser(test.creatorId)).append("\n")
                     .append("Статус: ").append(statusText(test.status)).append("\n")
                     .append("Вопросов: ").append(test.questions.size()).append(" | Прохождений: ").append(test.results.size()).append("\n\n");
@@ -2366,18 +2424,6 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         sendText(chatId, "Пользователю " + botService.displayUser(userId) + " бессрочно запрещено создавать тесты.", MenuFactory.mainMenu(botService.getRole(chatId)));
         sendText(userId, "⛔ Тебе бессрочно запрещено создавать тесты.", MenuFactory.mainMenu(botService.getRole(userId)));
     }
-
-    private void exportTestText(long chatId, String testId) {
-        try {
-            Path file = Files.createTempFile("testmasterbot-test", ".txt");
-            Files.writeString(file, botService.exportTestAsText(testId), StandardCharsets.UTF_8);
-            sendDocument(chatId, file, "Экспорт теста в TXT.");
-        } catch (Exception e) {
-            e.printStackTrace();
-            sendText(chatId, "Не удалось экспортировать тест.", MenuFactory.mainMenu(botService.getRole(chatId)));
-        }
-    }
-
 
     private List<List<String>> buildSummaryRows() {
         List<TestData> tests = botService.getAllTests();
@@ -2640,7 +2686,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         SendPhoto.SendPhotoBuilder<?, ?> builder = SendPhoto.builder()
                 .chatId(chatId)
                 .photo(new InputFile(photoFileId))
-                .caption(TextUtils.trimCaption(caption));
+                .caption(trimCaption(caption));
 
         if (keyboard instanceof InlineKeyboardMarkup inlineKeyboardMarkup) {
             builder.replyMarkup(inlineKeyboardMarkup);
@@ -2714,6 +2760,8 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         long questionStartedAtMillis;
         Long cardChatId;
         Integer questionMessageId;
+        Integer reviewMessageId;
+        String reviewScreenType;
         String lastTimerText;
         boolean awaitingConfirmation;
         int editingQuestionIndex = -1;
