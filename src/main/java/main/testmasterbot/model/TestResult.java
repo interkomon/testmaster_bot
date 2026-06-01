@@ -26,7 +26,7 @@ public class TestResult {
 
     @JsonIgnore
     public String getPercentText() {
-        return String.format(Locale.US, "%.1f%%", getPercent());
+        return String.format("%.1f%%", getPercent());
     }
 
     @JsonIgnore

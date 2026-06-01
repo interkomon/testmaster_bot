@@ -423,7 +423,7 @@ public class BotService {
                     .append(test.results.size()).append(';')
                     .append(finished).append(';')
                     .append(aborted).append(';')
-                    .append(String.format(Locale.US, "%.1f", test.averagePercent()))
+                    .append(String.format("%.1f", test.averagePercent()))
                     .append('\n');
         }
         return sb.toString();
@@ -456,7 +456,7 @@ public class BotService {
                         .append(escapeCsv(result.userName)).append(';')
                         .append(result.score).append(';')
                         .append(result.total).append(';')
-                        .append(String.format(Locale.US, "%.1f", result.getPercent())).append(';')
+                        .append(String.format("%.1f", result.getPercent())).append(';')
                         .append(result.aborted ? "aborted" : "finished").append(';')
                         .append(escapeCsv(result.finishReason)).append(';')
                         .append(result.completedAt == null ? "" : result.completedAt)
@@ -575,7 +575,7 @@ public class BotService {
         TestData demo = new TestData();
         demo.testId = codeGenerator.generateTestId(data);
         demo.creatorId = 0L;
-        demo.creatorName = "67";
+        demo.creatorName = "Andrey";
         demo.title = "Демо-тест по Java";
         demo.description = "Демонстрационный тест с разными типами вопросов.";
         demo.status = PublicationStatus.APPROVED;

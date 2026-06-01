@@ -52,10 +52,10 @@ public final class TextUtils {
         if (Math.abs(value - Math.rint(value)) < 0.000001) {
             return String.valueOf((long) Math.rint(value));
         }
-        return String.format(Locale.US, "%.3f", value);
+        return String.format("%.3f", value);
     }
 
     public static String formatPercent(double value) {
-        return String.format(Locale.US, "%.1f", value);
+        return String.format("%.1f", value);
     }
 }
