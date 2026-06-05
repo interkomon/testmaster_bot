@@ -13,7 +13,6 @@ public class TestData {
     public String description;
     public PublicationStatus status;
 
-    /** Старое поле оставлено для совместимости со старыми JSON-файлами. */
     public Boolean showCorrectAnswerImmediately = true;
 
     public AnswerRevealMode answerRevealMode = AnswerRevealMode.IMMEDIATE;

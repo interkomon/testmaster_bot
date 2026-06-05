@@ -31,11 +31,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -1462,7 +1459,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
                 answerCallback(callback.getId(), "Нет доступа.");
                 return;
             }
-            exportStatisticsCsv(chatId);
+            exportStatisticsExcel(chatId);
             answerCallback(callback.getId(), "Экспорт готовится.");
             return;
         }
@@ -2516,20 +2513,6 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         return rows;
     }
 
-    private List<List<String>> buildChartRows() {
-        List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of("Тест", "Прохождений", "Средний результат", "Прервано"));
-        for (TestData test : botService.getAllTests()) {
-            long aborted = test.results.stream().filter(result -> result.aborted).count();
-            rows.add(List.of(
-                    safeCell(test.title),
-                    String.valueOf(test.results.size()),
-                    TextUtils.formatPercent(test.averagePercent()),
-                    String.valueOf(aborted)
-            ));
-        }
-        return rows;
-    }
 
     private String safeCell(String value) {
         return value == null ? "" : value;
@@ -2605,7 +2588,7 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         return rows;
     }
 
-    private void exportStatisticsCsv(long chatId) {
+    private void exportStatisticsExcel(long chatId) {
         try {
             Path file = Files.createTempFile("testmasterbot-statistics", ".xlsx");
             SimpleXlsxBuilder.write(file, List.of(
@@ -2622,11 +2605,6 @@ public class TestMasterBot implements LongPollingSingleThreadUpdateConsumer {
         }
     }
 
-    private void addZipEntry(ZipOutputStream zip, String name, String content) throws java.io.IOException {
-        zip.putNextEntry(new ZipEntry(name));
-        zip.write(content.getBytes(StandardCharsets.UTF_8));
-        zip.closeEntry();
-    }
 
     private void sendText(long chatId, String text, ReplyKeyboard keyboard) {
         SendMessage message = SendMessage.builder()

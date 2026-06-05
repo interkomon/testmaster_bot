@@ -11,20 +11,18 @@ public class App {
     public static void main(String[] args) throws Exception {
         String botToken = System.getenv("TELEGRAM_BOT_TOKEN");
         if (botToken == null || botToken.isBlank()) {
-            System.out.println("Ошибка: не задан токен бота.");
+            System.out.println("Ошибка: не задан токен бота");
             return;
         }
 
         String dbUrl = System.getenv("DB_URL");
-        String dbUser = System.getenv("DB_USER");
-        String dbPassword = System.getenv("DB_PASSWORD");
 
         if (dbUrl == null || dbUrl.isBlank()) {
-            System.out.println("Ошибка: не задана строка подключения DB_URL.");
+            System.out.println("Ошибка: не задана строка подключения DB_URL");
             return;
         }
 
-        SqlServerDataStore dataStore = new SqlServerDataStore(dbUrl, dbUser, dbPassword);
+        SqlServerDataStore dataStore = new SqlServerDataStore(dbUrl);
         BotService botService = new BotService(dataStore);
         botService.bootstrapRolesFromEnv(
                 System.getenv("BOT_ADMIN_IDS"),
@@ -35,8 +33,7 @@ public class App {
 
         try (TelegramBotsLongPollingApplication botsApplication = new TelegramBotsLongPollingApplication()) {
             botsApplication.registerBot(botToken, new TestMasterBot(botToken, botService));
-            System.out.println("TestMasterBot запущен.");
-            System.out.println("Хранилище данных: SQL Server.");
+            System.out.println("TestMasterBot запущен");
             latch.await();
         }
     }

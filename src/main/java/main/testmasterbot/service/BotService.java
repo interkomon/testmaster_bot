@@ -19,7 +19,6 @@ public class BotService {
 
     public BotService(DataStore store) {
         this.store = store;
-        ensureSeedData();
     }
 
     public synchronized void bootstrapRolesFromEnv(String adminIds, String moderatorIds) {
@@ -342,7 +341,7 @@ public class BotService {
         store.save();
     }
 
-    /** Старый метод оставлен для совместимости с уже имеющимися кнопками. */
+
     public synchronized void toggleShowCorrectAnswerImmediately(String testId) {
         TestData test = store.load().tests.get(testId);
         if (test != null) {
@@ -409,114 +408,6 @@ public class BotService {
         return count;
     }
 
-    public synchronized String buildStatisticsCsv() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("test_id;title;creator;status;questions;attempts;finished;aborted;avg_percent\n");
-        for (TestData test : getAllTests()) {
-            long aborted = test.results.stream().filter(result -> result.aborted).count();
-            long finished = test.results.size() - aborted;
-            sb.append(test.testId).append(';')
-                    .append(escapeCsv(test.title)).append(';')
-                    .append(escapeCsv(displayUser(test.creatorId))).append(';')
-                    .append(test.status).append(';')
-                    .append(test.questions.size()).append(';')
-                    .append(test.results.size()).append(';')
-                    .append(finished).append(';')
-                    .append(aborted).append(';')
-                    .append(String.format("%.1f", test.averagePercent()))
-                    .append('\n');
-        }
-        return sb.toString();
-    }
-
-    public synchronized String buildUsersCsv() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("user_id;username;name;role;creation_blocked;blocked_until;reason\n");
-        for (KnownUser user : getKnownUsers()) {
-            UserRestriction restriction = store.load().restrictions.get(user.userId);
-            sb.append(user.userId).append(';')
-                    .append(escapeCsv(user.username == null ? "" : "@" + user.username)).append(';')
-                    .append(escapeCsv(user.displayName())).append(';')
-                    .append(getRole(user.userId)).append(';')
-                    .append(isCreationBlocked(user.userId)).append(';')
-                    .append(restriction == null || restriction.blockedUntil == null ? "" : restriction.blockedUntil).append(';')
-                    .append(escapeCsv(restriction == null ? "" : restriction.reason))
-                    .append('\n');
-        }
-        return sb.toString();
-    }
-
-    public synchronized String buildResultsCsv() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("test_id;test_title;user;score;total;percent;status;finish_reason;completed_at\n");
-        for (TestData test : getAllTests()) {
-            for (TestResult result : test.results) {
-                sb.append(test.testId).append(';')
-                        .append(escapeCsv(test.title)).append(';')
-                        .append(escapeCsv(result.userName)).append(';')
-                        .append(result.score).append(';')
-                        .append(result.total).append(';')
-                        .append(String.format("%.1f", result.getPercent())).append(';')
-                        .append(result.aborted ? "aborted" : "finished").append(';')
-                        .append(escapeCsv(result.finishReason)).append(';')
-                        .append(result.completedAt == null ? "" : result.completedAt)
-                        .append('\n');
-            }
-        }
-        return sb.toString();
-    }
-
-    public synchronized String buildAnswerDetailsCsv() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("test_id;test_title;user;question;user_answer;correct_answer;correct\n");
-        for (TestData test : getAllTests()) {
-            for (TestResult result : test.results) {
-                for (QuestionAnswerDetail detail : result.details) {
-                    sb.append(test.testId).append(';')
-                            .append(escapeCsv(test.title)).append(';')
-                            .append(escapeCsv(result.userName)).append(';')
-                            .append(escapeCsv(detail.questionText)).append(';')
-                            .append(escapeCsv(detail.userAnswer)).append(';')
-                            .append(escapeCsv(detail.correctAnswer)).append(';')
-                            .append(detail.correct)
-                            .append('\n');
-                }
-            }
-        }
-        return sb.toString();
-    }
-
-    public synchronized String exportTestAsText(String testId) {
-        TestData test = getTestById(testId);
-        if (test == null) {
-            return "Тест не найден";
-        }
-        StringBuilder sb = new StringBuilder();
-        sb.append("TEST_MASTER_BOT_EXPORT\n");
-        sb.append("Название: ").append(test.title).append("\n");
-        sb.append("Описание: ").append(test.description == null ? "" : test.description).append("\n");
-        sb.append("Код запуска: ").append(test.testId).append("\n");
-        sb.append("Статус: ").append(test.status).append("\n");
-        sb.append("Время теста: ").append(test.totalTimeLimitSeconds == null ? "без ограничения" : test.totalTimeLimitSeconds + " сек.").append("\n");
-        sb.append("Показ ответов: ").append(test.getEffectiveAnswerRevealMode()).append("\n\n");
-        for (int i = 0; i < test.questions.size(); i++) {
-            Question q = test.questions.get(i);
-            sb.append("Вопрос ").append(i + 1).append(": ").append(q.text).append("\n");
-            sb.append("Тип: ").append(q.type).append("\n");
-            if (q.type == QuestionType.SINGLE_CHOICE) {
-                for (int j = 0; j < q.options.size(); j++) {
-                    sb.append(j + 1).append(") ").append(q.options.get(j)).append("\n");
-                }
-                sb.append("Правильный вариант: ").append(q.correctOptionIndex == null ? "" : q.correctOptionIndex + 1).append("\n");
-            } else if (q.type == QuestionType.TEXT_INPUT) {
-                sb.append("Правильный ответ: ").append(q.correctTextAnswer).append("\n");
-            } else {
-                sb.append("Правильное число: ").append(q.correctNumberAnswer).append("\n");
-            }
-            sb.append("\n");
-        }
-        return sb.toString();
-    }
 
     public synchronized SupportRequest createSupportRequest(long userId, String userName, String text) {
         BotData data = store.load();
@@ -566,59 +457,8 @@ public class BotService {
     }
 
 
-    private void ensureSeedData() {
-        BotData data = store.load();
-        if (!data.tests.isEmpty()) {
-            return;
-        }
-
-        TestData demo = new TestData();
-        demo.testId = codeGenerator.generateTestId(data);
-        demo.creatorId = 0L;
-        demo.creatorName = "Andrey";
-        demo.title = "Демо-тест по Java";
-        demo.description = "Демонстрационный тест с разными типами вопросов.";
-        demo.status = PublicationStatus.APPROVED;
-        demo.answerRevealMode = AnswerRevealMode.IMMEDIATE;
-        demo.showCorrectAnswerImmediately = true;
-        demo.totalTimeLimitSeconds = null;
-        demo.questions = new ArrayList<>();
-
-        Question q1 = new Question();
-        q1.text = "Какой тип данных используется для целых чисел в Java?";
-        q1.type = QuestionType.SINGLE_CHOICE;
-        q1.options = List.of("String", "int", "boolean", "double");
-        q1.correctOptionIndex = 1;
-        demo.questions.add(q1);
-
-        Question q2 = new Question();
-        q2.text = "Как называется точка входа в Java-программу?";
-        q2.type = QuestionType.TEXT_INPUT;
-        q2.correctTextAnswer = "main";
-        demo.questions.add(q2);
-
-        Question q3 = new Question();
-        q3.text = "Сколько будет 2 + 2?";
-        q3.type = QuestionType.NUMBER_INPUT;
-        q3.correctNumberAnswer = 4.0;
-        demo.questions.add(q3);
-
-        data.tests.put(demo.testId, demo);
-        store.save();
-    }
-
     private String safeLower(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT);
     }
 
-    private String escapeCsv(String value) {
-        if (value == null) {
-            return "";
-        }
-        String escaped = value.replace("\"", "\"\"");
-        if (escaped.contains(";") || escaped.contains("\n") || escaped.contains("\"")) {
-            return "\"" + escaped + "\"";
-        }
-        return escaped;
-    }
 }
